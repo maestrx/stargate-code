@@ -30,7 +30,7 @@ struct i2c_message {
     //   15 -> chevron 5 dialing done
     //   16 -> chevron 6 dialing done
     //   17 -> chevron 7 dialing done
-    uint8_t action;  
+    uint8_t action;
     // chevron:
     //   chevron ID -> chevron 1 dialing done
     uint8_t chevron;
@@ -68,7 +68,7 @@ void setup(){
   Serial.begin(115200);
 
   bluetooth.begin(9600);
-  
+
   while(!Serial);
   Serial << "+++ Setup start" << endl;
   Wire.begin(); // Start the I2C Bus as MASTER
@@ -101,7 +101,7 @@ void loop(){
       last_keypress_millis = millis();
       readKey();
     }
-  }  
+  }
 
   if (bluetooth.available() > 0) {
     uint8_t inchar = bluetooth.read();
@@ -114,7 +114,7 @@ void loop(){
       Serial << "Button code: " << code << endl;
       processKey(code);
     }
-  }  
+  }
 
   if (address_last_key_millis > 0 && millis() - address_last_key_millis > address_key_input_timeout){
     // timeout
@@ -134,7 +134,7 @@ void resetDial(){
     i2c_message_out.action = 22;
     i2c_message_out.chevron = 0;
     i2c_message_queue_out.enqueue(i2c_message_out);
-    Serial << "* Symbol command sent to gate" << endl;    
+    Serial << "* Symbol command sent to gate" << endl;
 }
 
 void readKey(){
@@ -153,7 +153,7 @@ void readKey(){
   } else if (keypress0 < 700){
     code = 99;
   }
-  Serial << "Button code: " << code << endl;   
+  Serial << "Button code: " << code << endl;
   processKey(code);
 }
 
