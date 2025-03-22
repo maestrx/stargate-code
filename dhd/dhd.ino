@@ -1,5 +1,4 @@
 #define FAKE_GATE 1     // fake gate for testing
-#define MAX_NUMBER_OF_EVENTS 32
 
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
