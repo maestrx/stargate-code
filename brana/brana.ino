@@ -1,9 +1,26 @@
 #define FAKE_GATE 1     // fake gate for testing
 
+#define DEBUG_I2C false
+#define DEBUG_I2C_DEV if(DEBUG_I2C)Serial
+
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
 #include <Wire.h>
 #include <CNCShield.h>
+
+#define MP3_GATE_DIALING 1
+#define MP3_CHEVRON_SEAL 2
+#define MP3_WORMHOLE_START 3
+#define MP3_WORMHOLE_STOP 4
+#define MP3_WORMHOLE_RUNNING 5
+#define MP3_CHEVRON_1 6
+#define MP3_CHEVRON_2 7
+#define MP3_CHEVRON_3 8
+#define MP3_CHEVRON_4 9
+#define MP3_CHEVRON_5 10
+#define MP3_CHEVRON_6 11
+#define MP3_CHEVRON_7 12
+#define MP3_UNKNOWN 13
 
 // https://forum.arduino.cc/t/sending-struct-over-i2c/886392/30
 // https://github.com/EinarArnason/ArduinoQueue
@@ -26,24 +43,22 @@ struct i2c_message {
     //   50 -> Stop sounds
     //   99 -> No Operation
     //   --- GATE => DHD
-    //   11 -> chevron 1 dialing done
-    //   12 -> chevron 2 dialing done
-    //   13 -> chevron 3 dialing done
-    //   14 -> chevron 4 dialing done
-    //   15 -> chevron 5 dialing done
-    //   16 -> chevron 6 dialing done
-    //   17 -> chevron 7 dialing done
+    //   10 -> chevron dialing started
+    //   11 -> chevron dialing done
     //   99 -> No Operation
     uint8_t action;
     // chevron:
     //   chevron ID -> chevron 1 dialing done
     uint8_t chevron;
 };
-#define ACTION_NOOP 99
+#define ACTION_DIAL_START 10
+#define ACTION_DIAL_END 11
 #define ACTION_ADDR_VALID 20
 #define ACTION_ADDR_INVALID 21
 #define ACTION_GATE_RESET 22
 #define ACTION_SOUND_STOP 50
+#define ACTION_NOOP 99
+#define ACTION_NODATA 255  // indicates that no data were recieved over the I2C bus
 
 i2c_message i2c_message_send;
 i2c_message i2c_message_recieve;
@@ -204,24 +219,37 @@ void resetGate(){
 
 void process_in_queue(){
   if (i2c_message_queue_in.itemCount()) {
-    Serial << F("* Processing message from DHD") << endl;
+
     i2c_message_in = i2c_message_queue_in.dequeue();
     Serial << F("* Message details:") << i2c_message_in.action << F("/") << i2c_message_in.chevron << endl;
 
     // incoming dial chevron
     if (i2c_message_in.action > 0 and i2c_message_in.action < 8){
+      Serial << F("* Sending dial started") << endl;
+      i2c_message_out.action = ACTION_DIAL_START;
+      i2c_message_out.chevron = i2c_message_in.chevron;
+      i2c_message_queue_out.enqueue(i2c_message_out);
+
+      // do the dial
       dial();
+
+      // do chevron sound
+      Serial << F("* Sending dial done") << endl;
+      i2c_message_out.action = ACTION_DIAL_END;
+      i2c_message_out.chevron = i2c_message_in.chevron;
+      i2c_message_queue_out.enqueue(i2c_message_out);
       digitalWrite(dLED[i2c_message_in.action-1], HIGH);
-      delay(5000);
+
+      delay(3000);
 
     // valid address entered, establish gate
-    } else if (i2c_message_in.action == 20){
+    } else if (i2c_message_in.action == ACTION_ADDR_VALID){
 
     // INVALID address entered, reset gate
-    } else if (i2c_message_in.action == 21){
+    } else if (i2c_message_in.action == ACTION_ADDR_INVALID){
 
     // reset gate (after stop button ?)
-    } else if (i2c_message_in.action == 22){
+    } else if (i2c_message_in.action == ACTION_GATE_RESET){
       Serial << F("- reset dial recieved") << endl;
       resetGate();
     }
@@ -231,21 +259,21 @@ void process_in_queue(){
 }
 
 void i2c_recieve() {
-  Serial << F("++ wireRecieve") << endl;
+  DEBUG_I2C_DEV << F("i I2C recieve") << endl;
   while (Wire.available()) {
     Wire.readBytes((byte*)&i2c_message_recieve, sizeof(i2c_message));
   }
-  Serial << F("* Recieved message:") << i2c_message_recieve.action << F("/") << i2c_message_recieve.chevron << endl;
+  DEBUG_I2C_DEV << F("i Recieved message:") << i2c_message_recieve.action << F("/") << i2c_message_recieve.chevron << endl;
   i2c_message_queue_in.enqueue(i2c_message_recieve);
 }
 
 void i2c_send(){
   if (i2c_message_queue_out.itemCount()) {
-    Serial << F("* Sending message from the queue") << endl;
+    DEBUG_I2C_DEV << F("i Sending message from the queue") << endl;
     i2c_message_send = i2c_message_queue_out.dequeue();
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
   }else{
-    Serial << F("* Sending NOOP response ") << endl;
+    DEBUG_I2C_DEV << F("i Sending NOOP response ") << endl;
     i2c_message_send.action = ACTION_NOOP;
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
   }
