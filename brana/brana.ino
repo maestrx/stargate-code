@@ -75,9 +75,11 @@ unsigned long address_last_key_millis = 0;
 const long address_key_input_timeout = 10000;
 
 #ifdef FAKE_GATE
-  const int gate_chevron_steps = 810;
+  #define GATE_SYMBOLS 39
+  #define GATE_CHEVRON_STEPS 810
 #else
-  const int gate_chevron_steps = 246;
+  #define GATE_SYMBOLS 8
+  #define GATE_CHEVRON_STEPS 246
 #endif
 const int chevron_open_steps = 8;   // 9585 kroku dokola , 639 * 15
 
@@ -142,7 +144,7 @@ void dial(){
     dial_direction = CLOCKWISE; // dial rotation is opposit to the direction of the symbol !!!
     Serial << F("* dial directon:CLOCKWISE symbol direction:COUNTER current_symbol:") << current_symbol << F(" i2c_message_in.chevron:") << i2c_message_in.chevron << endl;
     if ( current_symbol < i2c_message_in.chevron ){
-      steps = 39 - i2c_message_in.chevron + current_symbol;
+      steps = GATE_SYMBOLS - i2c_message_in.chevron + current_symbol;
       Serial << F("* dial crossing top: 39 - i2c_message_in.chevron + current_symbol = ") << steps << F(" steps") << endl;
     }else{
       steps = current_symbol - i2c_message_in.chevron;
@@ -156,14 +158,14 @@ void dial(){
       steps = i2c_message_in.chevron - current_symbol;
       Serial << F("* dial not crossing top: i2c_message_in.chevron - current_symbol = ") << steps << F(" steps") << endl;
     }else{
-      steps = 39 - current_symbol + i2c_message_in.chevron;
+      steps = GATE_SYMBOLS - current_symbol + i2c_message_in.chevron;
       Serial << F("* dial crossing top: 39 - current_symbol + i2c_message_in.chevron = ") << steps << F(" steps") << endl;
     }
 
   }
 
   cnc_shield.enable();
-  motor_gate->step(gate_chevron_steps * steps, dial_direction);
+  motor_gate->step(GATE_CHEVRON_STEPS * steps, dial_direction);
   current_symbol = i2c_message_in.chevron;
   Serial << F("* current_symbol after: ") << current_symbol  << endl;
 

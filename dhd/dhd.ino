@@ -380,13 +380,13 @@ void readKey(){
   int keypress = analogRead(keypad_input);
   #ifdef FAKE_GATE
   if (keypress < 70){
-    symbol = 10;
+    symbol = 1;
   } else if (keypress < 200){
-    symbol = 11;
+    symbol = 3;
   } else if (keypress < 300){
-    symbol = 12;
+    symbol = 5;
   } else if (keypress < 500){
-    symbol = 13;
+    symbol = 7;
   } else if (keypress < 700){
     symbol = 99;
   }
