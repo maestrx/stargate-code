@@ -76,7 +76,7 @@ uint8_t current_symbol;
 void setup(){
   Serial.begin(115200);
   while(!Serial);
-  Serial << "+++ Setup start" << endl;
+  Serial << F("+++ Setup start") << endl;
 
   Wire.begin(8);                  // Start the I2C Bus as SLAVE on address 8
   Wire.onReceive(i2c_recieve);
@@ -88,19 +88,19 @@ void setup(){
   #else
     pinMode(Calibrate_Resistor, INPUT);
   #endif
-  Serial << "* LED mode set" << endl;
+  Serial << F("* LED mode set") << endl;
   for (int i = 0; i < 9; i ++){
     pinMode(dLED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
   }
 
-  Serial << "* CNC enable" << endl;
+  Serial << F("* CNC enable") << endl;
   cnc_shield.begin();
   motor_gate->set_speed(SPEED_STEPS_PER_SECOND);
   motor_chevron->set_speed(SPEED_STEPS_PER_SECOND);
 
   resetGate();
 
-  Serial << "* Setup done" << endl;
+  Serial << F("* Setup done") << endl;
 
 }
 
@@ -109,7 +109,7 @@ void loop(){
 
   if (address_last_key_millis > 0 && millis() - address_last_key_millis > address_key_input_timeout){
     // timeout
-    Serial << "- Gate timeout" << endl;
+    Serial << F("- Gate timeout") << endl;
     resetGate();
   }
 }
@@ -117,27 +117,27 @@ void loop(){
 void dial(){
   uint8_t dial_direction;
   uint8_t steps;
-  Serial << "* dial action: i2c_message_in.action" << endl;
+  Serial << F("* dial action: i2c_message_in.action") << endl;
   if ((i2c_message_in.action % 2) != 0){ // if dial symbol is even, rotate symbols left
     dial_direction = CLOCKWISE; // dial rotation is opposit to the direction of the symbol !!!
-    Serial << "* dial directon:CLOCKWISE symbol direction:COUNTER current_symbol:" << current_symbol << " i2c_message_in.chevron:" << i2c_message_in.chevron << endl;
+    Serial << F("* dial directon:CLOCKWISE symbol direction:COUNTER current_symbol:") << current_symbol << F(" i2c_message_in.chevron:") << i2c_message_in.chevron << endl;
     if ( current_symbol < i2c_message_in.chevron ){
       steps = 39 - i2c_message_in.chevron + current_symbol;
-      Serial << "* dial crossing top: 39 - i2c_message_in.chevron + current_symbol = " << steps << " steps" << endl;
+      Serial << F("* dial crossing top: 39 - i2c_message_in.chevron + current_symbol = ") << steps << F(" steps") << endl;
     }else{
       steps = current_symbol - i2c_message_in.chevron;
-      Serial << "* dial not crossing top: current_symbol - i2c_message_in.chevron = " << steps << " steps" << endl;
+      Serial << F("* dial not crossing top: current_symbol - i2c_message_in.chevron = ") << steps << F(" steps") << endl;
     }
 
   }else{
     dial_direction = COUNTER; // dial rotation is opposit to the direction of the symbol !!!
-    Serial << "* dial directon:COUNTER symbol direction:CLOCKWISE current_symbol:" << current_symbol << " i2c_message_in.chevron:" << i2c_message_in.chevron << endl;
+    Serial << F("* dial directon:COUNTER symbol direction:CLOCKWISE current_symbol:") << current_symbol << F(" i2c_message_in.chevron:") << i2c_message_in.chevron << endl;
     if ( current_symbol < i2c_message_in.chevron ){
       steps = i2c_message_in.chevron - current_symbol;
-      Serial << "* dial not crossing top: i2c_message_in.chevron - current_symbol = " << steps << " steps" << endl;
+      Serial << F("* dial not crossing top: i2c_message_in.chevron - current_symbol = ") << steps << F(" steps") << endl;
     }else{
       steps = 39 - current_symbol + i2c_message_in.chevron;
-      Serial << "* dial crossing top: 39 - current_symbol + i2c_message_in.chevron = " << steps << " steps" << endl;
+      Serial << F("* dial crossing top: 39 - current_symbol + i2c_message_in.chevron = ") << steps << F(" steps") << endl;
     }
 
   }
@@ -145,7 +145,7 @@ void dial(){
   cnc_shield.enable();
   motor_gate->step(gate_chevron_steps * steps, dial_direction);
   current_symbol = i2c_message_in.chevron;
-  Serial << "* current_symbol after: " << current_symbol  << endl;
+  Serial << F("* current_symbol after: ") << current_symbol  << endl;
 
   motor_chevron->step(5, CLOCKWISE);
   delay(500);
@@ -156,7 +156,7 @@ void dial(){
 }
 
 void resetGate(){
-  Serial << "--- Address sequence reset" << endl;
+  Serial << F("--- Address sequence reset") << endl;
   address_last_key_millis = 0;
 
   // turn off all LEDs
@@ -166,7 +166,7 @@ void resetGate(){
   }
 
   // rotate symbols to the initial position
-  Serial << "Calib LED ON" << endl;
+  Serial << F("Calib LED ON") << endl;
   digitalWrite(Calibrate_LED, HIGH);
   cnc_shield.enable();
   #ifdef FAKE_GATE
@@ -178,13 +178,13 @@ void resetGate(){
    #endif
 
     int calib = analogRead(Calibrate_Resistor);
-    // Serial << "Calib LED read:" << calib << endl;
+    // Serial << F("Calib LED read:") << calib << endl;
     #ifdef FAKE_GATE
       if (calib>99){
     #else
       if (calib>3){
     #endif
-        Serial << "Calib steps:" << i << endl;
+        Serial << F("Calib steps:") << i << endl;
         break;
       }
   }
@@ -199,9 +199,9 @@ void resetGate(){
 
 void process_in_queue(){
   if (i2c_message_queue_in.itemCount()) {
-    Serial << "* Processing message from DHD" << endl;
+    Serial << F("* Processing message from DHD") << endl;
     i2c_message_in = i2c_message_queue_in.dequeue();
-    Serial << "* Message details:" << i2c_message_in.action << "/" << i2c_message_in.chevron << endl;
+    Serial << F("* Message details:") << i2c_message_in.action << F("/") << i2c_message_in.chevron << endl;
 
     // incoming dial chevron
     if (i2c_message_in.action > 0 and i2c_message_in.action < 8){
@@ -217,7 +217,7 @@ void process_in_queue(){
 
     // reset gate (after stop button ?)
     } else if (i2c_message_in.action == 22){
-      Serial << "- reset dial recieved" << endl;
+      Serial << F("- reset dial recieved") << endl;
       resetGate();
     }
 
@@ -226,17 +226,17 @@ void process_in_queue(){
 }
 
 void i2c_recieve() {
-  Serial << "++ wireRecieve" << endl;
+  Serial << F("++ wireRecieve") << endl;
   while (Wire.available()) {
     Wire.readBytes((byte*)&i2c_message_recieve, sizeof(i2c_message));
   }
-  Serial << "* Recieved message:" << i2c_message_recieve.action << "/" << i2c_message_recieve.chevron << endl;
+  Serial << F("* Recieved message:") << i2c_message_recieve.action << F("/") << i2c_message_recieve.chevron << endl;
   i2c_message_queue_in.enqueue(i2c_message_recieve);
 }
 
 void i2c_send(){
   if (i2c_message_queue_out.itemCount()) {
-    Serial << "* Sending message from the queue" << endl;
+    Serial << F("* Sending message from the queue") << endl;
     i2c_message_send = i2c_message_queue_out.dequeue();
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
   }

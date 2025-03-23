@@ -87,7 +87,7 @@ int valid_address_list[][7] = {
 void setup(){
   Serial.begin(115200);
   while(!Serial);
-  Serial << "+++ Setup start" << endl;
+  Serial << F("+++ Setup start") << endl;
 
   #ifdef FAKE_GATE
   bluetooth.begin(9600);
@@ -95,11 +95,11 @@ void setup(){
   #endif
 
   pinMode(keypad_input, INPUT);
-  Serial << "LED mode set" << endl;
+  Serial << F("LED mode set") << endl;
   for (int i = 0; i < 9; i ++){
     pinMode(dLED[i], OUTPUT); // make the DHD LED pins outputs
   }
-  Serial << "LED OFF" << endl;
+  Serial << F("LED OFF") << endl;
   for (int i = 0; i < 9; i ++){
     digitalWrite(dLED[i], LOW);  // turn all LEDs off
   }
@@ -110,7 +110,7 @@ void setup(){
   t.every(500, i2c_send_mp3);
   t.every(5000, i2c_keepalive);
 
-  Serial << "* Setup done" << endl;
+  Serial << F("* Setup done") << endl;
 }
 
 void loop(){
@@ -118,7 +118,7 @@ void loop(){
 
   if (address_last_key_millis + 500 < millis() ){
     if (analogRead(keypad_input) < 950){
-      Serial << "+++ Key pressed" << endl;
+      Serial << F("+++ Key pressed") << endl;
       address_last_key_millis = millis();
       readKey();
     }
@@ -128,12 +128,12 @@ void loop(){
   if (bluetooth.available() > 0) {
     uint8_t inchar = bluetooth.read();
     if (48 <= inchar and inchar <= 57){
-      Serial << "In charX:" << inchar << endl;
+      Serial << F("In charX:") << inchar << endl;
       uint8_t code = inchar - 48;
       if (inchar == 48){
         code = 99;
       }
-      Serial << "Button code: " << code << endl;
+      Serial << F("Button code: ") << code << endl;
       processKey(code);
     }
   }
@@ -141,13 +141,13 @@ void loop(){
 
   if (address_last_key_millis > 0 && millis() - address_last_key_millis > address_key_input_timeout){
     // timeout
-    Serial << "- Key press timeout" << endl;
+    Serial << F("- Key press timeout") << endl;
     resetDial();
   }
 }
 
 void resetDial(){
-    Serial << "--- Address sequence reset" << endl;
+    Serial << F("--- Address sequence reset") << endl;
     address_queue_index = 0;
     address_last_key_millis = 0;
     for (int i = 0; i < 9; i ++){
@@ -291,24 +291,24 @@ void readKey(){
     symbol = 7;
   }
   #endif
-  Serial << "Button symbol: " << symbol << endl;
+  Serial << F("Button symbol: ") << symbol << endl;
   processKey(symbol);
 }
 
 void processKey(uint8_t symbol){
-  Serial << "* address_queue_index:" << address_queue_index << endl;
-  Serial << "* symbol:" << symbol << endl;
+  Serial << F("* address_queue_index:") << address_queue_index << endl;
+  Serial << F("* symbol:") << symbol << endl;
 
   if (address_queue_index > 7){ // ignore if anything after 7th symbol and red button
-    Serial << "* ignoring after 7th index:" << address_queue_index << endl;
+    Serial << F("* ignoring after 7th index:") << address_queue_index << endl;
     address_last_key_millis = millis();
     return;
   } else if (address_queue_index == 7 and symbol != 99){ // ignore if anything else than red button after 7th symbol
-    Serial << "* ignoring 7th index if not red:" << address_queue_index << " Symbol:" << symbol << endl;
+    Serial << F("* ignoring 7th index if not red:") << address_queue_index << F(" Symbol:") << symbol << endl;
     address_last_key_millis = millis();
     return;
   }else if (address_queue_index != 7 and symbol == 99){
-    Serial << "* ignoring red if not 7th index:" << address_queue_index << " Symbol:" << symbol << endl;
+    Serial << F("* ignoring red if not 7th index:") << address_queue_index << F(" Symbol:") << symbol << endl;
     address_last_key_millis = millis();
     return; // ignore red button if not after 7th symbol
   }
@@ -316,56 +316,56 @@ void processKey(uint8_t symbol){
   // check if symbol not already in the address queue
   for (int i = 0; i < address_queue_index; i++){
     if (address_queue[i] == symbol){
-      Serial << "* ignoring duplicate symbol" << symbol << endl;
+      Serial << F("* ignoring duplicate symbol") << symbol << endl;
       address_last_key_millis = millis();
       return;
     }
   }
 
   if (address_queue_index < 7){
-    Serial << "* LED ID:" << dLED[address_queue_index] << " ON " << endl;
+    Serial << F("* LED ID:") << dLED[address_queue_index] << F(" ON ") << endl;
     digitalWrite(dLED[address_queue_index], HIGH);
   }else{
-    Serial << "- Skipping RED button LED at tyhis stage" << endl;
+    Serial << F("- Skipping RED button LED at tyhis stage") << endl;
   }
 
   // play sounds for the symbol
   i2c_message_mp3_out.action = 6 + address_queue_index;
   i2c_message_mp3_out.chevron = 0;
   i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
-  Serial << "* Sent sound PLAY ID:" << (6 + address_queue_index) << endl;
+  Serial << F("* Sent sound PLAY ID:") << (6 + address_queue_index) << endl;
 
   i2c_message_gate_out.action = address_queue_index+1;
   i2c_message_gate_out.chevron = symbol;
   i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
-  Serial << "* Symbol command sent to gate" << endl;
+  Serial << F("* Symbol command sent to gate") << endl;
 
   address_queue[address_queue_index] = symbol;
-  Serial << "* Added symbol:" << symbol << " to address queue at index:" << address_queue_index << endl;
+  Serial << F("* Added symbol:") << symbol << F(" to address queue at index:") << address_queue_index << endl;
 
   if (address_queue_index == 7){
     // check if the address is valid
-    Serial << "* Verifying that the complete address is valid" << endl;
+    Serial << F("* Verifying that the complete address is valid") << endl;
     bool addrvalid = false;
     for (int i = 0; i < sizeof(valid_address_list) / sizeof(valid_address_list[0]); i++){
-      //Serial << "* Comparing address: " << address_queue[0] << ":" << address_queue[1] << ":" << address_queue[2] << ":" << address_queue[3] << ":" << address_queue[4] << ":" << address_queue[5] << ":" << address_queue[6] << ":" << endl;
-      //Serial << "* Comparing address: " << valid_address_list[i][0] << ":" << valid_address_list[i][1] << ":" << valid_address_list[i][2] << ":" << valid_address_list[i][3] << ":" << valid_address_list[i][4] << ":" << valid_address_list[i][5] << ":" << valid_address_list[i][6] << ":" << endl;
+      //Serial << F("* Comparing address: ") << address_queue[0] << F(":") << address_queue[1] << F(":") << address_queue[2] << F(":") << address_queue[3] << F(":") << address_queue[4] << F(":") << address_queue[5] << F(":") << address_queue[6] << F(":") << endl;
+      //Serial << F("* Comparing address: ") << valid_address_list[i][0] << F(":") << valid_address_list[i][1] << F(":") << valid_address_list[i][2] << F(":") << valid_address_list[i][3] << F(":") << valid_address_list[i][4] << F(":") << valid_address_list[i][5] << F(":") << valid_address_list[i][6] << F(":") << endl;
       bool valid = true;
       for (int j = 0; j < 7; j++){
         if (address_queue[j] != valid_address_list[i][j]){
-          // Serial << "- addr symbol is invalid: " << address_queue[j] << "<>" << valid_address_list[i][j] << endl;
+          // Serial << F("- addr symbol is invalid: ") << address_queue[j] << F("<>") << valid_address_list[i][j] << endl;
           valid = false;
         }
       }
       if (valid){
           // valid address
-          Serial << "* Address is valid" << endl;
+          Serial << F("* Address is valid") << endl;
           addrvalid = true;
           break;
       }
     }
     if (! addrvalid){
-      Serial << "- Address is INVALID" << endl;
+      Serial << F("- Address is INVALID") << endl;
       address_last_key_millis = millis();
       resetDial();
       return;
@@ -373,17 +373,17 @@ void processKey(uint8_t symbol){
   }
 
   address_queue_index += 1;
-  Serial << "* New address index:" << address_queue_index << endl;
+  Serial << F("* New address index:") << address_queue_index << endl;
   address_last_key_millis = millis();
 }
 
 
 void i2c_send_gate(){
   if (i2c_message_queue_gate_out.itemCount()) {
-    Serial << "* Sending message from the queue to gate" << endl;
+    Serial << F("* Sending message from the queue to gate") << endl;
     i2c_message_gate_send = i2c_message_queue_gate_out.dequeue();
     Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
-    Serial << "* Sending data to gate" << endl;
+    Serial << F("* Sending data to gate") << endl;
     Wire.beginTransmission(8);
     Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
     Wire.endTransmission();
@@ -392,9 +392,9 @@ void i2c_send_gate(){
 
 void i2c_send_mp3(){
   if (i2c_message_queue_mp3_out.itemCount()) {
-    Serial << "* Sending message from the queue to mp3" << endl;
+    Serial << F("* Sending message from the queue to mp3") << endl;
     i2c_message_mp3_send = i2c_message_queue_mp3_out.dequeue();
-    Serial << "* Sending data to mp3" << endl;
+    Serial << F("* Sending data to mp3") << endl;
     Wire.beginTransmission(9);
     Wire.write((byte *)&i2c_message_mp3_send, sizeof(i2c_message));
     Wire.endTransmission();
@@ -402,37 +402,37 @@ void i2c_send_mp3(){
 }
 
 void i2c_recieve_gate(){
-  // Serial << "* Requesting data from gate" << endl;
+  // Serial << F("* Requesting data from gate") << endl;
   Wire.requestFrom(8, sizeof(i2c_message));
   while (Wire.available()) {
     Wire.readBytes((byte*)&i2c_message_gate_recieve, sizeof(i2c_message));
   }
   if (i2c_message_gate_recieve.action == 0){
-    Serial << "* Recieved keepalive from gate" << endl;
+    Serial << F("* Recieved keepalive from gate") << endl;
 
   } else if (i2c_message_gate_recieve.action == 0) {
-    Serial << "Recieved: " << i2c_message_gate_recieve.action << "/" << i2c_message_gate_recieve.chevron << endl;
+    Serial << F("Recieved: ") << i2c_message_gate_recieve.action << F("/") << i2c_message_gate_recieve.chevron << endl;
   }
 }
 
 void i2c_recieve_mp3(){
-  // Serial << "* Requesting data from gate" << endl;
+  // Serial << F("* Requesting data from gate") << endl;
   Wire.requestFrom(9, sizeof(i2c_message));
   while (Wire.available()) {
     Wire.readBytes((byte*)&i2c_message_mp3_recieve, sizeof(i2c_message));
   }
   if (i2c_message_gate_recieve.action != 0){
-    Serial << "Recieved: " << i2c_message_gate_recieve.action << "/" << i2c_message_gate_recieve.chevron << endl;
+    Serial << F("Recieved: ") << i2c_message_gate_recieve.action << F("/") << i2c_message_gate_recieve.chevron << endl;
   }
 }
 
 void i2c_keepalive(){
-  Serial << "* Sending keepalive to mp3" << endl;
+  Serial << F("* Sending keepalive to mp3") << endl;
   i2c_message_mp3_out.action = 0;
   i2c_message_mp3_out.chevron = 0;
   i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
-  Serial << "* Sending keepalive to gate" << endl;
+  Serial << F("* Sending keepalive to gate") << endl;
   i2c_message_gate_out.action = 0;
   i2c_message_gate_out.chevron = symbol;
   i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);

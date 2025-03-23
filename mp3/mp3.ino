@@ -55,7 +55,7 @@ DFRobotDFPlayerMini MP3player;
 void setup() {
   Serial.begin(115200);
   while(!Serial);
-  Serial << "+++ Setup start" << endl;
+  Serial << F("+++ Setup start") << endl;
 
   MP3Serial.begin(9600);
 
@@ -71,7 +71,7 @@ void setup() {
     }
   }
   MP3player.volume(30);  //Set volume value. From 0 to 30
-  Serial << "* Setup done" << endl;
+  Serial << F("* Setup done") << endl;
 }
 
 
@@ -83,16 +83,16 @@ void loop() {
 
 void process_in_queue(){
   if (i2c_message_queue_in.itemCount()) {
-    Serial << "* Processing message from DHD" << endl;
+    Serial << F("* Processing message from DHD") << endl;
     i2c_message_in = i2c_message_queue_in.dequeue();
 
-    Serial << "* Message details:" << i2c_message_in.action << "/" << i2c_message_in.chevron << endl;
+    Serial << F("* Message details:") << i2c_message_in.action << F("/") << i2c_message_in.chevron << endl;
     if (i2c_message_in.action == 50){
-      Serial << "* Stop playback" << endl;
+      Serial << F("* Stop playback") << endl;
       MP3player.stop();
 
     } else {
-      Serial << "* Play track ID: " << i2c_message_in.action << endl;
+      Serial << F("* Play track ID: ") << i2c_message_in.action << endl;
       MP3player.play(i2c_message_in.action);
     }
   }
@@ -100,17 +100,17 @@ void process_in_queue(){
 
 
 void i2c_recieve() {
-  Serial << "++ wireRecieve" << endl;
+  Serial << F("++ wireRecieve") << endl;
   while (Wire.available()) {
     Wire.readBytes((byte*)&i2c_message_recieve, sizeof(i2c_message));
   }
-  Serial << "* Recieved message:" << i2c_message_recieve.action << "/" << i2c_message_recieve.chevron << endl;
+  Serial << F("* Recieved message:") << i2c_message_recieve.action << F("/") << i2c_message_recieve.chevron << endl;
   i2c_message_queue_in.enqueue(i2c_message_recieve);
 }
 
 void i2c_send(){
   if (i2c_message_queue_out.itemCount()) {
-    Serial << "* Sending message from the queue" << endl;
+    Serial << F("* Sending message from the queue") << endl;
     i2c_message_send = i2c_message_queue_out.dequeue();
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
   }
