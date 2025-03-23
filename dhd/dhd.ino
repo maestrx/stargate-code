@@ -1,5 +1,10 @@
 #define FAKE_GATE 1     // fake gate for testing
 
+#define DEBUG_I2C_MP3 false
+#define DEBUG_I2C_MP3_DEV if(DEBUG_I2C_MP3)Serial
+#define DEBUG_I2C_GATE false
+#define DEBUG_I2C_GATE_DEV if(DEBUG_I2C_GATE)Serial
+
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
 #include <Wire.h>
@@ -41,6 +46,7 @@ struct i2c_message {
     uint8_t chevron;
 };
 #define ACTION_NOOP 99
+#define ACTION_NODATA 255  // indicates that no data were recieved over the I2C bus
 #define ACTION_ADDR_VALID 20
 #define ACTION_ADDR_INVALID 21
 #define ACTION_GATE_RESET 22
@@ -55,6 +61,12 @@ i2c_message i2c_message_mp3_send;
 i2c_message i2c_message_mp3_recieve;
 i2c_message i2c_message_mp3_out;
 ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(4);
+
+unsigned long i2c_gate_last_alive = 0;
+bool i2c_gate_alive = false;
+unsigned long i2c_mp3_last_alive = 0;
+bool i2c_mp3_alive = false;
+uint16_t i2c_timeout = 5000;
 
 Timer t;
 
@@ -114,6 +126,7 @@ void setup(){
   t.every(500, i2c_recieve_gate);
   t.every(500, i2c_send_mp3);
   t.every(500, i2c_recieve_mp3);
+  t.every(5000, i2c_check_timeout);
 
   Serial << F("* Setup done") << endl;
 }
@@ -385,10 +398,10 @@ void processKey(uint8_t symbol){
 
 void i2c_send_gate(){
   if (i2c_message_queue_gate_out.itemCount()) {
-    Serial << F("* Sending message from the queue to gate") << endl;
+    DEBUG_I2C_GATE_DEV << F("i Sending message from the queue to gate") << endl;
     i2c_message_gate_send = i2c_message_queue_gate_out.dequeue();
     Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
-    Serial << F("* Sending data to gate") << endl;
+    DEBUG_I2C_GATE_DEV << F("i Sending data to gate") << endl;
     Wire.beginTransmission(8);
     Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
     Wire.endTransmission();
@@ -397,9 +410,9 @@ void i2c_send_gate(){
 
 void i2c_send_mp3(){
   if (i2c_message_queue_mp3_out.itemCount()) {
-    Serial << F("* Sending message from the queue to mp3") << endl;
+    DEBUG_I2C_MP3_DEV << F("i Sending message from the queue to mp3") << endl;
     i2c_message_mp3_send = i2c_message_queue_mp3_out.dequeue();
-    Serial << F("* Sending data to mp3") << endl;
+    DEBUG_I2C_MP3_DEV << F("i Sending data to mp3") << endl;
     Wire.beginTransmission(9);
     Wire.write((byte *)&i2c_message_mp3_send, sizeof(i2c_message));
     Wire.endTransmission();
@@ -407,26 +420,50 @@ void i2c_send_mp3(){
 }
 
 void i2c_recieve_gate(){
-  Serial << F("* Requesting data from gate") << endl;
+  i2c_message_gate_recieve.action = ACTION_NODATA;
+  DEBUG_I2C_GATE_DEV << F("i Requesting data from gate") << endl;
   Wire.requestFrom(8, sizeof(i2c_message));
-  Wire.readBytes((byte*)&i2c_message_gate_recieve, sizeof(i2c_message));
-  // Serial << F("MSG gate:") << i2c_message_gate_recieve.action << endl;
+  if (Wire.available()){
+    Wire.readBytes((byte*)&i2c_message_gate_recieve, sizeof(i2c_message));
+  }
+  DEBUG_I2C_GATE_DEV << F("i MSG gate:") << i2c_message_gate_recieve.action << endl;
   if (i2c_message_gate_recieve.action == ACTION_NOOP){
-    Serial << F("* Recieved keepalive from gate") << endl;
+    DEBUG_I2C_GATE_DEV << F("i Recieved keepalive from gate") << endl;
+    i2c_gate_last_alive = millis();
+    i2c_gate_alive = true;
+  } else if ( i2c_message_gate_recieve.action == ACTION_NODATA){
+    DEBUG_I2C_GATE_DEV << F("i No data recieved from gate!") << endl;
   } else {
     Serial << F("Recieved: ") << i2c_message_gate_recieve.action << F("/") << i2c_message_gate_recieve.chevron << endl;
   }
 }
 
 void i2c_recieve_mp3(){
-  Serial << F("* Requesting data from mp3") << endl;
+  i2c_message_mp3_recieve.action = ACTION_NODATA;
+  DEBUG_I2C_MP3_DEV << F("i Requesting data from mp3") << endl;
   Wire.requestFrom(8, sizeof(i2c_message));
-  Wire.readBytes((byte*)&i2c_message_mp3_recieve, sizeof(i2c_message));
-  // Serial << F("MSG mp3:") << i2c_message_mp3_recieve.action << endl;
+  if (Wire.available()){
+    Wire.readBytes((byte*)&i2c_message_mp3_recieve, sizeof(i2c_message));
+  }
+  DEBUG_I2C_MP3_DEV << F("i MSG mp3:") << i2c_message_mp3_recieve.action << endl;
   if (i2c_message_mp3_recieve.action == ACTION_NOOP){
-    Serial << F("* Recieved keepalive from mp3") << endl;
+    DEBUG_I2C_MP3_DEV << F("i Recieved keepalive from mp3") << endl;
+    i2c_mp3_last_alive = millis();
+    i2c_mp3_alive = true;
+  } else if ( i2c_message_mp3_recieve.action == ACTION_NODATA){
+    DEBUG_I2C_MP3_DEV << F("i No data recieved from mp3!") << endl;
   } else {
     Serial << F("Recieved: ") << i2c_message_mp3_recieve.action << F("/") << i2c_message_mp3_recieve.chevron << endl;
   }
 }
 
+void i2c_check_timeout(){
+  if (i2c_gate_last_alive + i2c_timeout < millis()){
+    Serial << F("! Gate I2C timeout") << endl;
+    i2c_gate_alive = false;
+  }
+  if (i2c_mp3_last_alive + i2c_timeout < millis()){
+    Serial << F("! MP3 I2C timeout") << endl;
+    i2c_mp3_alive = false;
+  }
+}
