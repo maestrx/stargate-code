@@ -11,7 +11,6 @@
 struct i2c_message {
     // action:
     //   --- DHD => GATE
-    //   0 -> No Operation
     //   1 -> chevron 1 ID
     //   2 -> chevron 2 ID
     //   3 -> chevron 3 ID
@@ -22,12 +21,12 @@ struct i2c_message {
     //   20 -> RED button pressed, valid address
     //   21 -> RED button pressed, INVALID address, reset dial
     //   22 -> reset dial/close gate (RED button pressed to close gate)
+    //   99 -> No Operation
     //   --- DHD => MP3
-    //   0 -> No Operation
     //   X -> Play sound X (1-14)
     //   50 -> Stop sounds
+    //   99 -> No Operation
     //   --- GATE => DHD
-    //   0 -> No Operation
     //   11 -> chevron 1 dialing done
     //   12 -> chevron 2 dialing done
     //   13 -> chevron 3 dialing done
@@ -35,11 +34,17 @@ struct i2c_message {
     //   15 -> chevron 5 dialing done
     //   16 -> chevron 6 dialing done
     //   17 -> chevron 7 dialing done
+    //   99 -> No Operation
     uint8_t action;
     // chevron:
     //   chevron ID -> chevron 1 dialing done
     uint8_t chevron;
 };
+#define ACTION_NOOP 99
+#define ACTION_ADDR_VALID 20
+#define ACTION_ADDR_INVALID 21
+#define ACTION_GATE_RESET 22
+#define ACTION_SOUND_STOP 50
 
 i2c_message i2c_message_send;
 i2c_message i2c_message_recieve;
@@ -113,7 +118,13 @@ void i2c_send(){
     Serial << F("* Sending message from the queue") << endl;
     i2c_message_send = i2c_message_queue_out.dequeue();
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
+  }else{
+    Serial << F("* Sending NOOP response ") << endl;
+    i2c_message_send.action = ACTION_NOOP;
+    Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
   }
 
 }
+
+
 
