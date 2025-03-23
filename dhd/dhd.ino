@@ -23,9 +23,11 @@ struct i2c_message {
     //   21 -> RED button pressed, INVALID address, reset dial
     //   22 -> reset dial/close gate (RED button pressed to close gate)
     //   --- DHD => MP3
-    //   0 -> Stop sounds
+    //   0 -> No Operation
     //   X -> Play sound X (1-14)
+    //   50 -> Stop sounds
     //   --- GATE => DHD
+    //   0 -> No Operation
     //   11 -> chevron 1 dialing done
     //   12 -> chevron 2 dialing done
     //   13 -> chevron 3 dialing done
@@ -42,10 +44,10 @@ struct i2c_message {
 i2c_message i2c_message_gate_send;
 i2c_message i2c_message_gate_recieve;
 i2c_message i2c_message_gate_out;
-ArduinoQueue<i2c_message> i2c_message_queue_gate_in(4);
-ArduinoQueue<i2c_message> i2c_message_queue_gate_out(16);
+ArduinoQueue<i2c_message> i2c_message_queue_gate_out(4);
 
 i2c_message i2c_message_mp3_send;
+i2c_message i2c_message_mp3_recieve;
 i2c_message i2c_message_mp3_out;
 ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(4);
 
@@ -330,7 +332,7 @@ void processKey(uint8_t symbol){
   // play sounds for the symbol
   i2c_message_mp3_out.action = 6 + address_queue_index;
   i2c_message_mp3_out.chevron = 0;
-  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);  
+  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
   Serial << "* Sent sound PLAY ID:" << (6 + address_queue_index) << endl;
 
   i2c_message_gate_out.action = address_queue_index+1;
@@ -388,17 +390,6 @@ void i2c_send_gate(){
   }
 }
 
-void i2c_recieve_gate(){
-  // Serial << "* Requesting data from gate" << endl;
-  Wire.requestFrom(8, sizeof(i2c_message));
-  while (Wire.available()) {
-    Wire.readBytes((byte*)&i2c_message_gate_recieve, sizeof(i2c_message));
-  }
-  if (i2c_message_gate_recieve.action != 0){
-    Serial << "Recieved: " << i2c_message_gate_recieve.action << "/" << i2c_message_gate_recieve.chevron << endl;
-  }
-}
-
 void i2c_send_mp3(){
   if (i2c_message_queue_mp3_out.itemCount()) {
     Serial << "* Sending message from the queue to mp3" << endl;
@@ -410,9 +401,39 @@ void i2c_send_mp3(){
   }
 }
 
+void i2c_recieve_gate(){
+  // Serial << "* Requesting data from gate" << endl;
+  Wire.requestFrom(8, sizeof(i2c_message));
+  while (Wire.available()) {
+    Wire.readBytes((byte*)&i2c_message_gate_recieve, sizeof(i2c_message));
+  }
+  if (i2c_message_gate_recieve.action == 0){
+    Serial << "* Recieved keepalive from gate" << endl;
+
+  } else if (i2c_message_gate_recieve.action == 0) {
+    Serial << "Recieved: " << i2c_message_gate_recieve.action << "/" << i2c_message_gate_recieve.chevron << endl;
+  }
+}
+
+void i2c_recieve_mp3(){
+  // Serial << "* Requesting data from gate" << endl;
+  Wire.requestFrom(9, sizeof(i2c_message));
+  while (Wire.available()) {
+    Wire.readBytes((byte*)&i2c_message_mp3_recieve, sizeof(i2c_message));
+  }
+  if (i2c_message_gate_recieve.action != 0){
+    Serial << "Recieved: " << i2c_message_gate_recieve.action << "/" << i2c_message_gate_recieve.chevron << endl;
+  }
+}
 
 void i2c_keepalive(){
+  Serial << "* Sending keepalive to mp3" << endl;
+  i2c_message_mp3_out.action = 0;
+  i2c_message_mp3_out.chevron = 0;
+  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
-
-  
+  Serial << "* Sending keepalive to gate" << endl;
+  i2c_message_gate_out.action = 0;
+  i2c_message_gate_out.chevron = symbol;
+  i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
 }

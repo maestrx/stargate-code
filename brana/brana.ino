@@ -22,9 +22,11 @@ struct i2c_message {
     //   21 -> RED button pressed, INVALID address, reset dial
     //   22 -> reset dial/close gate (RED button pressed to close gate)
     //   --- DHD => MP3
-    //   0 -> Stop sounds
+    //   0 -> No Operation
     //   X -> Play sound X (1-14)
+    //   50 -> Stop sounds
     //   --- GATE => DHD
+    //   0 -> No Operation
     //   11 -> chevron 1 dialing done
     //   12 -> chevron 2 dialing done
     //   13 -> chevron 3 dialing done
