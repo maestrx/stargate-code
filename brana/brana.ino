@@ -75,10 +75,10 @@ unsigned long address_last_key_millis = 0;
 const long address_key_input_timeout = 10000;
 
 #ifdef FAKE_GATE
-  #define GATE_SYMBOLS 39
+  #define GATE_SYMBOLS 8
   #define GATE_CHEVRON_STEPS 810
 #else
-  #define GATE_SYMBOLS 8
+  #define GATE_SYMBOLS 39
   #define GATE_CHEVRON_STEPS 246
 #endif
 const int chevron_open_steps = 8;   // 9585 kroku dokola , 639 * 15
@@ -210,10 +210,17 @@ void resetGate(){
         break;
       }
   }
-  #ifndef FAKE_GATE
+
+  #ifdef FAKE_GATE
+    Serial << F("Shift gate by 4 to make 1 on teh top") << endl;
+    motor_gate->step(GATE_CHEVRON_STEPS * 4, CLOCKWISE);
+  #else
     cnc_shield.disable();
   #endif
   digitalWrite(Calibrate_LED, LOW);
+
+
+
 
   // set current symbol on the top of the gate
   current_symbol = 1;

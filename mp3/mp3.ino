@@ -87,7 +87,7 @@ void setup() {
       delay(0);
     }
   }
-  MP3player.volume(30);  //Set volume value. From 0 to 30
+  MP3player.volume(15);  //Set volume value. From 0 to 30
   Serial << F("* Setup done") << endl;
 }
 

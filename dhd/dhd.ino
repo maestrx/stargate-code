@@ -130,7 +130,7 @@ void setup(){
       delay(0);
     }
   }
-  MP3player.volume(30);  //Set volume value. From 0 to 30
+  MP3player.volume(15);  //Set volume value. From 0 to 30
 
   #ifdef FAKE_GATE
   bluetooth.begin(9600);
@@ -197,6 +197,10 @@ void resetDial(){
     for (int i = 0; i < 9; i ++){
       digitalWrite(chevron_LED[i], LOW);  // turn all 8 LEDs off
     }
+    Serial << F("* Send gate reset") << endl;
+    i2c_message_gate_out.action = ACTION_GATE_RESET;
+    i2c_message_gate_out.chevron = 0;
+    i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
 }
 
 void processKey(uint8_t symbol){
@@ -236,13 +240,13 @@ void processKey(uint8_t symbol){
   // play sounds for the DHD button
   MP3player.play(6 + address_queue_index);
 
+  Serial << F("* Send symbol comand to gate") << endl;
   i2c_message_gate_out.action = address_queue_index+1;
   i2c_message_gate_out.chevron = symbol;
   i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
-  Serial << F("* Symbol command sent to gate") << endl;
 
+  Serial << F("* Add symbol:") << symbol << F(" to address queue at index:") << address_queue_index << endl;
   address_queue[address_queue_index] = symbol;
-  Serial << F("* Added symbol:") << symbol << F(" to address queue at index:") << address_queue_index << endl;
 
   if (address_queue_index == 7){
     // check if the address is valid
@@ -267,7 +271,6 @@ void processKey(uint8_t symbol){
     }
     if (! addrvalid){
       Serial << F("- Address is INVALID") << endl;
-      address_last_key_millis = millis();
       resetDial();
       return;
     }
