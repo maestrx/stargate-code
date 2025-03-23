@@ -85,12 +85,12 @@ int valid_address_list[][7] = {
 void setup(){
   Serial.begin(115200);
   while(!Serial);
+  Serial << "+++ Setup start" << endl;
+
   #ifdef FAKE_GATE
   bluetooth.begin(9600);
   while(!bluetooth);
   #endif
-
-  Serial << "+++ Setup start" << endl;
 
   pinMode(keypad_input, INPUT);
   Serial << "LED mode set" << endl;
@@ -106,6 +106,7 @@ void setup(){
   t.every(500, i2c_send_gate);
   t.every(500, i2c_recieve_gate);
   t.every(500, i2c_send_mp3);
+  t.every(5000, i2c_keepalive);
 
   Serial << "* Setup done" << endl;
 }
@@ -327,10 +328,9 @@ void processKey(uint8_t symbol){
   }
 
   // play sounds for the symbol
-
-  Wire.beginTransmission(9);
-  Wire.write(6 + address_queue_index);  // play sound effect
-  Wire.endTransmission();
+  i2c_message_mp3_out.action = 6 + address_queue_index;
+  i2c_message_mp3_out.chevron = 0;
+  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);  
   Serial << "* Sent sound PLAY ID:" << (6 + address_queue_index) << endl;
 
   i2c_message_gate_out.action = address_queue_index+1;
@@ -400,7 +400,7 @@ void i2c_recieve_gate(){
 }
 
 void i2c_send_mp3(){
-  if (i2c_message_queue_gate_out.itemCount()) {
+  if (i2c_message_queue_mp3_out.itemCount()) {
     Serial << "* Sending message from the queue to mp3" << endl;
     i2c_message_mp3_send = i2c_message_queue_mp3_out.dequeue();
     Serial << "* Sending data to mp3" << endl;
@@ -408,4 +408,11 @@ void i2c_send_mp3(){
     Wire.write((byte *)&i2c_message_mp3_send, sizeof(i2c_message));
     Wire.endTransmission();
   }
+}
+
+
+void i2c_keepalive(){
+
+
+  
 }

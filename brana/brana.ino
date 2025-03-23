@@ -176,7 +176,7 @@ void resetGate(){
    #endif
 
     int calib = analogRead(Calibrate_Resistor);
-    Serial << "Calib LED read:" << calib << endl;
+    // Serial << "Calib LED read:" << calib << endl;
     #ifdef FAKE_GATE
       if (calib>99){
     #else
