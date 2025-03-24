@@ -10,8 +10,6 @@
 #include <Wire.h>
 #include <TEvent.h>
 #include <Timer.h>
-#include <SoftwareSerial.h>
-#include <DFRobotDFPlayerMini.h>
 
 #define MP3_GATE_DIALING 1
 #define MP3_CHEVRON_SEAL 2
@@ -83,15 +81,13 @@ uint16_t i2c_timeout = 5000;
 
 Timer t;
 
-SoftwareSerial MP3Serial(12, 10);
-DFRobotDFPlayerMini MP3player;
-
 #ifdef FAKE_GATE
-SoftwareSerial bluetooth(13, 11);
+#include <SoftwareSerial.h>
+SoftwareSerial bluetooth(11, 10);
 #endif
 
 // variables to read buttons and decode them
-const byte keypad_input = A0;
+#define KEYPAD_INPUT A1
 unsigned long address_last_key_millis = 0;
 const long address_key_input_timeout = 10000;
 int symbol;
@@ -121,23 +117,12 @@ void setup(){
   while(!Serial);
   Serial << F("+++ Setup start") << endl;
 
-  MP3Serial.begin(9600);
-  while(!MP3Serial);
-  Serial << F("Initializing DFPlayer ... (May take 3~5 seconds)") << endl;
-  if (!MP3player.begin(MP3Serial, /*isACK = */true, /*doReset = */true)) {  //Use serial to communicate with mp3.
-    Serial << F("Unable to begin: Check wiring and verify SD card!") << endl;
-    while(true){
-      delay(0);
-    }
-  }
-  MP3player.volume(15);  //Set volume value. From 0 to 30
-
   #ifdef FAKE_GATE
   bluetooth.begin(9600);
   while(!bluetooth);
   #endif
 
-  pinMode(keypad_input, INPUT);
+  pinMode(KEYPAD_INPUT, INPUT);
   Serial << F("LED mode set") << endl;
   for (int i = 0; i < 9; i ++){
     pinMode(chevron_LED[i], OUTPUT); // make the DHD LED pins outputs
@@ -161,10 +146,15 @@ void loop(){
   t.update();
 
   if (address_last_key_millis + 500 < millis() ){
-    if (analogRead(keypad_input) < 950){
+    uint16_t keypress = analogRead(KEYPAD_INPUT);
+    #ifdef FAKE_GATE
+    if (keypress < 900){
+    #else
+    if (keypress < 950){
+    #endif
       Serial << F("+++ Key pressed") << endl;
       address_last_key_millis = millis();
-      readKey();
+      readKey(keypress);
     }
   }
 
@@ -224,21 +214,18 @@ void processKey(uint8_t symbol){
   // check if symbol not already in the address queue
   for (int i = 0; i < address_queue_index; i++){
     if (address_queue[i] == symbol){
-      Serial << F("* ignoring duplicate symbol") << symbol << endl;
+      Serial << F("* ignoring duplicate symbol: ") << symbol << endl;
       address_last_key_millis = millis();
       return;
     }
   }
 
   if (address_queue_index < 7){
-    Serial << F("* LED ID:") << chevron_LED[address_queue_index] << F(" ON ") << endl;
+    Serial << F("* LED ID: ") << chevron_LED[address_queue_index] << F(" on index ") << address_queue_index << F(" is ON ") << endl;
     digitalWrite(chevron_LED[address_queue_index], HIGH);
   }else{
     Serial << F("- Skipping RED button LED at this stage") << endl;
   }
-
-  // play sounds for the DHD button
-  MP3player.play(6 + address_queue_index);
 
   Serial << F("* Send symbol comand to gate") << endl;
   i2c_message_gate_out.action = address_queue_index+1;
@@ -338,7 +325,6 @@ void i2c_recieve_gate(){
   } else if ( i2c_message_gate_recieve.action == ACTION_NODATA){
     DEBUG_I2C_GATE_DEV << F("i No data recieved from gate!") << endl;
 
-
   } else {
     Serial << F("Recieved: ") << i2c_message_gate_recieve.action << F("/") << i2c_message_gate_recieve.chevron << endl;
 
@@ -378,9 +364,9 @@ void i2c_check_timeout(){
   }
 }
 
-void readKey(){
+void readKey(uint16_t keypress){
   int symbol = 0;
-  int keypress = analogRead(keypad_input);
+  Serial << F("Keypress: ") << keypress << endl;
   #ifdef FAKE_GATE
   if (keypress < 70){
     symbol = 1;
@@ -517,3 +503,14 @@ void readKey(){
   Serial << F("Button symbol: ") << symbol << endl;
   processKey(symbol);
 }
+
+// #define DFPLAYER_RECEIVED_LENGTH 10
+// #define DFPLAYER_SEND_LENGTH 10
+// uint8_t _sending[DFPLAYER_SEND_LENGTH] = {0x7E, 0xFF, 06, 00, 01, 00, 00, 00, 00, 0xEF};
+//
+// void play(byte track){
+//
+//
+//
+//
+// }

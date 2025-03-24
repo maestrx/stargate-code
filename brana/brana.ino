@@ -7,6 +7,7 @@
 #include <PrintStream.h>
 #include <Wire.h>
 #include <CNCShield.h>
+#include <DFRobotDFPlayerMini.h>
 
 #define MP3_GATE_DIALING 1
 #define MP3_CHEVRON_SEAL 2
@@ -39,8 +40,8 @@ struct i2c_message {
     //   22 -> reset dial/close gate (RED button pressed to close gate)
     //   99 -> No Operation
     //   --- DHD => MP3
-    //   X -> Play sound X (1-14)
-    //   50 -> Stop sounds
+    //   X -> Play dhd sound X (1-14)
+    //   50 -> Stop dhd sounds
     //   99 -> No Operation
     //   --- GATE => DHD
     //   10 -> chevron dialing started
@@ -83,6 +84,8 @@ const long address_key_input_timeout = 10000;
 #endif
 const int chevron_open_steps = 8;   // 9585 kroku dokola , 639 * 15
 
+DFRobotDFPlayerMini MP3player;
+
 CNCShield cnc_shield;
 StepperMotor *motor_gate = cnc_shield.get_motor(0);
 StepperMotor *motor_chevron = cnc_shield.get_motor(1);
@@ -94,11 +97,21 @@ const int Chevron_LED[] = {40,41,42,43,44,45,46,47};     // TBD!!!
 
 uint8_t current_symbol;
 
-
 void setup(){
   Serial.begin(115200);
   while(!Serial);
   Serial << F("+++ Setup start") << endl;
+
+  Serial1.begin(9600);
+  while(!Serial1);
+  Serial << F("Initializing DFPlayer ... (May take 3~5 seconds)") << endl;
+  if (!MP3player.begin(Serial1, /*isACK = */true, /*doReset = */true)) {  //Use serial to communicate with mp3.
+    Serial << F("Unable to begin: Check wiring and verify SD card!") << endl;
+    while(true){
+      delay(0);
+    }
+  }
+  MP3player.volume(15);  //Set volume value. From 0 to 30
 
   Wire.begin(8);                  // Start the I2C Bus as SLAVE on address 8
   Wire.onReceive(i2c_recieve);
@@ -123,7 +136,6 @@ void setup(){
   resetGate();
 
   Serial << F("* Setup done") << endl;
-
 }
 
 void loop(){
@@ -164,17 +176,29 @@ void dial(){
 
   }
 
+  // play sounds for the DHD button
+  Serial << F("* Play gate dial sound") << endl;
+  MP3player.stop();
+  MP3player.play(1);
+
+  // dial the gate
+  Serial << F("* Dialing the gate") << endl;
   cnc_shield.enable();
   motor_gate->step(GATE_CHEVRON_STEPS * steps, dial_direction);
-  current_symbol = i2c_message_in.chevron;
-  Serial << F("* current_symbol after: ") << current_symbol  << endl;
 
+  Serial << F("* Play chevron seal sound") << endl;
+  MP3player.stop();
+  MP3player.play(2);
+
+  Serial << F("* Sealing chevron") << endl;
   motor_chevron->step(5, CLOCKWISE);
   delay(500);
   motor_chevron->step(8, COUNTER);
   cnc_shield.disable();
 
-  delay(3000);
+  current_symbol = i2c_message_in.chevron;
+  Serial << F("* current_symbol after: ") << current_symbol  << endl;
+
 }
 
 void resetGate(){
