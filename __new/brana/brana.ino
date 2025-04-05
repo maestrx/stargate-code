@@ -237,13 +237,14 @@ void resetGate(){
       }
   }
 
+  digitalWrite(Calibrate_LED, LOW);
   #ifdef FAKE_GATE
     Serial << F("Shift gate by 4 to make 1 on teh top") << endl;
     motor_gate->step(GATE_CHEVRON_STEPS * 4, CLOCKWISE);
   #else
     cnc_shield.disable();
   #endif
-  digitalWrite(Calibrate_LED, LOW);
+
 
   // set current symbol on the top of the gate
   current_symbol = 1;

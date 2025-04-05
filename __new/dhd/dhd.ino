@@ -89,7 +89,7 @@ SoftwareSerial bluetooth(11, 10);
 #endif
 
 // variables to read buttons and decode them
-#define KEYPAD_INPUT A1
+#define KEYPAD_INPUT A0
 unsigned long address_last_key_millis = 0;
 const long address_key_input_timeout = 10000;
 int symbol;
