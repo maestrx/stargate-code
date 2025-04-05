@@ -1,5 +1,7 @@
 // version 0.1, 1.4.2025
 
+#define FAKE_GATE 1     // fake gate for testing
+
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
 #include <Wire.h>
@@ -68,7 +70,11 @@ i2c_message i2c_message_in;
 ArduinoQueue<i2c_message> i2c_message_queue_in(16);
 ArduinoQueue<i2c_message> i2c_message_queue_out(4);
 
+#ifdef FAKE_GATE
 SoftwareSerial MP3Serial(/*rx =*/10, /*tx =*/11);
+#else
+SoftwareSerial MP3Serial(/*rx =*/3, /*tx =*/2);
+#endif
 DFRobotDFPlayerMini MP3player;
 
 
@@ -90,7 +96,12 @@ void setup() {
       delay(0);
     }
   }
+#ifdef FAKE_GATE
   MP3player.volume(15);  //Set volume value. From 0 to 30
+#else
+  MP3player.volume(30);  //Set volume value. From 0 to 30
+#endif
+
   Serial << F("* Setup done") << endl;
 }
 

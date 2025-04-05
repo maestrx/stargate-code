@@ -1,6 +1,6 @@
 // version 0.1, 1.4.2025
 
-#define FAKE_GATE 1     // fake gate for testing
+//#define FAKE_GATE 1     // fake gate for testing
 
 #define DEBUG_I2C false
 #define DEBUG_I2C_DEV if(DEBUG_I2C)Serial
@@ -127,7 +127,11 @@ void setup(){
       delay(0);
     }
   }
-  MP3player.volume(15);           //Set volume value. From 0 to 30
+#ifdef FAKE_GATE
+  MP3player.volume(15);  //Set volume value. From 0 to 30
+#else
+  MP3player.volume(30);  //Set volume value. From 0 to 30
+#endif
 
   Wire.begin(8);                  // Start the I2C Bus as SLAVE on address 8
   Wire.onReceive(i2c_recieve);
