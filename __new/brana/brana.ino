@@ -1,3 +1,5 @@
+// version 0.1, 1.4.2025
+
 #define FAKE_GATE 1     // fake gate for testing
 
 #define DEBUG_I2C false

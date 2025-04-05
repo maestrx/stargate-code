@@ -1,3 +1,5 @@
+// version 0.1, 1.4.2025
+
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
 #include <Wire.h>
@@ -68,6 +70,7 @@ ArduinoQueue<i2c_message> i2c_message_queue_out(4);
 
 SoftwareSerial MP3Serial(/*rx =*/10, /*tx =*/11);
 DFRobotDFPlayerMini MP3player;
+
 
 void setup() {
   Serial.begin(115200);
