@@ -71,12 +71,14 @@ i2c_message i2c_message_in;
 ArduinoQueue<i2c_message> i2c_message_queue_in(32);
 ArduinoQueue<i2c_message> i2c_message_queue_out(32);
 
+// set motor speed, 1000 is max speed
 #define SPEED_STEPS_PER_SECOND 1000
 
-const int dLED[] = {2,3,4,5,6,7,8,9,};  // LED pin array
+// timing of the gate reset
 unsigned long address_last_key_millis = 0;
 const long address_key_input_timeout = 10000;
 
+// set the number of motor steps for the gate and chevron
 #ifdef FAKE_GATE
   #define GATE_SYMBOLS 8
   #define GATE_CHEVRON_STEPS 810
@@ -86,17 +88,29 @@ const long address_key_input_timeout = 10000;
 #endif
 const int chevron_open_steps = 8;   // 9585 kroku dokola , 639 * 15
 
+// mp3 player object
 DFRobotDFPlayerMini MP3player;
 
+// motor objects
 CNCShield cnc_shield;
 StepperMotor *motor_gate = cnc_shield.get_motor(0);
 StepperMotor *motor_chevron = cnc_shield.get_motor(1);
 
+// define LED PINs
+#ifdef FAKE_GATE
 const int Calibrate_LED = 15;
 const int Calibrate_Resistor = A8;
 const int Ramp_LED = 16;
 const int Chevron_LED[] = {40,41,42,43,44,45,46,47};     // TBD!!!
+#else
+const int Calibrate_LED = 16;
+const int Calibrate_Resistor = A8;
+const int Ramp_LED = 51;
+const int Chevron_LED[] = {47,45,43,41,39,37,35,33,31};     // TBD!!!
 
+#endif
+
+// variable containing the ID of symbol that is being currently dialed
 uint8_t current_symbol;
 
 void setup(){
@@ -113,7 +127,7 @@ void setup(){
       delay(0);
     }
   }
-  MP3player.volume(15);  //Set volume value. From 0 to 30
+  MP3player.volume(15);           //Set volume value. From 0 to 30
 
   Wire.begin(8);                  // Start the I2C Bus as SLAVE on address 8
   Wire.onReceive(i2c_recieve);
@@ -127,7 +141,7 @@ void setup(){
   #endif
   Serial << F("* LED mode set") << endl;
   for (int i = 0; i < 9; i ++){
-    pinMode(dLED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
+    pinMode(Chevron_LED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
   }
 
   Serial << F("* CNC enable") << endl;
@@ -271,7 +285,7 @@ void process_in_queue(){
       i2c_message_out.action = ACTION_DIAL_END;
       i2c_message_out.chevron = i2c_message_in.chevron;
       i2c_message_queue_out.enqueue(i2c_message_out);
-      digitalWrite(dLED[i2c_message_in.action-1], HIGH);
+      digitalWrite(Chevron_LED[i2c_message_in.action-1], HIGH);
 
       delay(3000);
 
