@@ -89,10 +89,10 @@ void loop(){
   process_in_queue();
 
   // reset the gate to default in case no command was recieved in defined timeframe
-  if (address_last_key_millis > 0 && millis() - address_last_key_millis > GATE_ACTION_TIMEOUT){
-    Serial << F("- Gate timeout. Doing reset!") << endl;
-    resetGate();
-  }
+  //if (address_last_key_millis > 0 && millis() - address_last_key_millis > GATE_ACTION_TIMEOUT){
+  //  Serial << F("- Gate timeout. Doing reset!") << endl;
+  //  resetGate();
+  //}
 }
 
 // dial/turn the gate
