@@ -203,7 +203,6 @@ void resetGate(){
     cnc_shield.disable();
   #endif
 
-
   // set current symbol on the top of the gate
   current_symbol = 1;
 }
