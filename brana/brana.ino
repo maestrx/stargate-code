@@ -1,10 +1,3 @@
-// version 0.1, 1.4.2025
-
-//#define FAKE_GATE 1     // fake gate for testing
-
-#define DEBUG_I2C false
-#define DEBUG_I2C_DEV if(DEBUG_I2C)Serial
-
 #include <stargate.h>
 #include <ArduinoQueue.h>
 #include <PrintStream.h>

@@ -1,5 +1,3 @@
-// version 0.1, 1.4.2025
-
 #include <stargate.h>
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
