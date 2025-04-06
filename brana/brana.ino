@@ -149,9 +149,9 @@ void dial(){
 
   // while chevron seal sound id being played, seal the chevron
   Serial << F("* Sealing chevron") << endl;
-  motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
-  delay(500);
-  motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
+  //motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
+  //delay(500);
+  //motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
   cnc_shield.disable();
 
   // set current symbol for next dialing
@@ -183,7 +183,7 @@ void resetGate(){
   }
 
   // rotate symbols to the initial position
-  Serial << F("* Calib LED ON, dialing to default position") << endl;
+  Serial << F("* Calib LED ON (PIN ") << Calibrate_LED << F("), dialing to default position") << endl;
   digitalWrite(Calibrate_LED, HIGH);
   cnc_shield.enable();
   #ifdef FAKE_GATE
