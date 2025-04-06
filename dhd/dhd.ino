@@ -1,69 +1,11 @@
 // version 0.1, 1.4.2025
 
-//#define FAKE_GATE 1     // fake gate for testing
-
-#define DEBUG_I2C_MP3 false
-#define DEBUG_I2C_MP3_DEV if(DEBUG_I2C_MP3)Serial
-#define DEBUG_I2C_GATE false
-#define DEBUG_I2C_GATE_DEV if(DEBUG_I2C_GATE)Serial
-
+#include <stargate.h>
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
 #include <Wire.h>
 #include <TEvent.h>
 #include <Timer.h>
-
-#define MP3_GATE_DIALING 1
-#define MP3_CHEVRON_SEAL 2
-#define MP3_WORMHOLE_START 3
-#define MP3_WORMHOLE_STOP 4
-#define MP3_WORMHOLE_RUNNING 5
-#define MP3_CHEVRON_1 6
-#define MP3_CHEVRON_2 7
-#define MP3_CHEVRON_3 8
-#define MP3_CHEVRON_4 9
-#define MP3_CHEVRON_5 10
-#define MP3_CHEVRON_6 11
-#define MP3_CHEVRON_7 12
-#define MP3_UNKNOWN 13
-
-// https://forum.arduino.cc/t/sending-struct-over-i2c/886392/30
-// https://github.com/EinarArnason/ArduinoQueue
-struct i2c_message {
-    // action:
-    //   --- DHD => GATE
-    //   1 -> chevron 1 ID
-    //   2 -> chevron 2 ID
-    //   3 -> chevron 3 ID
-    //   4 -> chevron 4 ID
-    //   5 -> chevron 5 ID
-    //   6 -> chevron 6 ID
-    //   7 -> chevron 7 ID
-    //   20 -> RED button pressed, valid address
-    //   21 -> RED button pressed, INVALID address, reset dial
-    //   22 -> reset dial/close gate (RED button pressed to close gate)
-    //   99 -> No Operation
-    //   --- DHD => MP3
-    //   X -> Play sound X (1-14)
-    //   50 -> Stop sounds
-    //   99 -> No Operation
-    //   --- GATE => DHD
-    //   10 -> chevron dialing started
-    //   11 -> chevron dialing done
-    //   99 -> No Operation
-    uint8_t action;
-    // chevron:
-    //   chevron ID -> chevron 1 dialing done
-    uint8_t chevron;
-};
-#define ACTION_DIAL_START 10
-#define ACTION_DIAL_END 11
-#define ACTION_ADDR_VALID 20
-#define ACTION_ADDR_INVALID 21
-#define ACTION_GATE_RESET 22
-#define ACTION_SOUND_STOP 50
-#define ACTION_NOOP 99
-#define ACTION_NODATA 255  // indicates that no data were recieved over the I2C bus
 
 i2c_message i2c_message_gate_send;
 i2c_message i2c_message_gate_recieve;
