@@ -1,4 +1,3 @@
-
 #include <stargate.h>
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
@@ -6,41 +5,41 @@
 #include <TEvent.h>
 #include <Timer.h>
 
+// i2c objects to read and send messages with Gate
 i2c_message i2c_message_gate_send;
 i2c_message i2c_message_gate_recieve;
 i2c_message i2c_message_gate_out;
 ArduinoQueue<i2c_message> i2c_message_queue_gate_out(4);
 
+// i2c objects to read and send messages with MP3
 i2c_message i2c_message_mp3_send;
 i2c_message i2c_message_mp3_recieve;
 i2c_message i2c_message_mp3_out;
 ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(4);
 
+// I2C timeout variables
 unsigned long i2c_gate_last_alive = 0;
 bool i2c_gate_alive = false;
 unsigned long i2c_mp3_last_alive = 0;
 bool i2c_mp3_alive = false;
-uint16_t i2c_timeout = 5000;
+const uint16_t i2c_timeout = 5000;
 
 Timer t;
 
+// Connect Bluetooth to the DHD for symbol input
 #ifdef FAKE_GATE
 #include <SoftwareSerial.h>
 SoftwareSerial bluetooth(11, 10);
 #endif
 
-// variables to read buttons and decode them
-#define KEYPAD_INPUT A0
+// timing of the dhd key input reset
 unsigned long address_last_key_millis = 0;
-const long address_key_input_timeout = 10000;
-int symbol;
 
 // variables to store pressed symbols and process them
 int address_queue[8];           // 7 symbols, 8th is red
 int address_queue_index = 0;    // index of the last symbol in the address queue
 
-int chevron_LED[] = {2,3,4,5,6,7,8,9,};  // LED pin array
-
+// list of valida addresses
 int valid_address_list[][7] = {
   {27,7 ,15,32,12,30,1 },   // Abydos
   {7 ,16,24,28,6 ,10,1 },   // Test
@@ -55,52 +54,66 @@ int valid_address_list[][7] = {
   {1,2 ,3,4,5,6,7 },        // bluetooth test
 };
 
+
 void setup(){
   Serial.begin(115200);
   while(!Serial);
   Serial << F("+++ Setup start") << endl;
 
+  // Init bluetooth
   #ifdef FAKE_GATE
   bluetooth.begin(9600);
   while(!bluetooth);
   #endif
 
+  // set pin modes
   pinMode(KEYPAD_INPUT, INPUT);
-  Serial << F("LED mode set") << endl;
+  Serial << F("* Set PIN modes") << endl;
   for (int i = 0; i < 9; i ++){
-    pinMode(chevron_LED[i], OUTPUT); // make the DHD LED pins outputs
+    pinMode(DHD_Chevron_LED[i], OUTPUT); // make the DHD LED pins outputs
   }
-  Serial << F("LED OFF") << endl;
+  Serial << F("* LED OFF") << endl;
   for (int i = 0; i < 9; i ++){
-    digitalWrite(chevron_LED[i], LOW);  // turn all LEDs off
+    digitalWrite(DHD_Chevron_LED[i], LOW);  // turn all LEDs off
   }
 
-  Wire.begin(); // Start the I2C Bus as MASTER
+  // Init I2C bus as MASTER and schedule the I2C push/pull tasks
+  Serial << F("* I2C init") << endl;
+  Wire.begin();
   t.every(500, i2c_send_gate);
   t.every(500, i2c_recieve_gate);
   t.every(500, i2c_send_mp3);
   t.every(500, i2c_recieve_mp3);
   t.every(5000, i2c_check_timeout);
 
-  Serial << F("* Setup done") << endl;
+  // reset teh game to default
+  Serial << F("* HDH reset") << endl;
+  resetDHD();
+
+  // DHD ready
+  Serial << F("+++ Setup done") << endl;
 }
 
 void loop(){
+  // trigger timer events
   t.update();
 
+  // read keypad input twice a second
   if (address_last_key_millis + 500 < millis() ){
+    // read the raw value
     uint16_t keypress = analogRead(KEYPAD_INPUT);
-    #ifdef FAKE_GATE
-    if (keypress < 900){
-    #else
-    if (keypress < 950){
-    #endif
+
+    // consider it a valid keypress as long as the value is lower than the defined treshold
+    if (keypress < KEYPRESS_RAW_THRESHOLD){
       Serial << F("+++ Key pressed") << endl;
+      // start the key input timer
       address_last_key_millis = millis();
+      // decode the raw read value to symbol ID
       readKey(keypress);
     }
   }
 
+  // process the bluetooth input
   #ifdef FAKE_GATE
   if (bluetooth.available() > 0) {
     uint8_t inchar = bluetooth.read();
@@ -116,24 +129,32 @@ void loop(){
   }
   #endif
 
-  if (address_last_key_millis > 0 && millis() - address_last_key_millis > address_key_input_timeout){
-    // timeout
-    Serial << F("- Key press timeout") << endl;
-    resetDial();
+  // reset the DHD to default in case no keypress was recieved in defined timeframe
+  if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
+    Serial << F("- Key press timeout. Doing reset!") << endl;
+    resetDHD();
   }
 }
 
-void resetDial(){
-    Serial << F("--- Address sequence reset") << endl;
-    address_queue_index = 0;
-    address_last_key_millis = 0;
-    for (int i = 0; i < 9; i ++){
-      digitalWrite(chevron_LED[i], LOW);  // turn all 8 LEDs off
-    }
-    Serial << F("* Send gate reset") << endl;
-    i2c_message_gate_out.action = ACTION_GATE_RESET;
-    i2c_message_gate_out.chevron = 0;
-    i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
+void resetDHD(){
+  Serial << F("+++ DHD reset") << endl;
+
+  // reset key timeout timer
+  address_last_key_millis = 0;
+  address_queue_index = 0;
+
+  // turn off all LEDs
+  Serial << F("* Turn off all LEDs") << endl;
+  for (int i = 0; i < 9; i ++){
+    digitalWrite(DHD_Chevron_LED[i], LOW);
+  }
+
+  Serial << F("* Send reset command to gate") << endl;
+  i2c_message_gate_out.action = ACTION_GATE_RESET;
+  i2c_message_gate_out.chevron = 0;
+  i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
+
+  Serial << F("--- DHD reset done") << endl;
 }
 
 void processKey(uint8_t symbol){
@@ -164,11 +185,16 @@ void processKey(uint8_t symbol){
   }
 
   if (address_queue_index < 7){
-    Serial << F("* LED ID: ") << chevron_LED[address_queue_index] << F(" on index ") << address_queue_index << F(" is ON ") << endl;
-    digitalWrite(chevron_LED[address_queue_index], HIGH);
+    Serial << F("* LED ID: ") << DHD_Chevron_LED[address_queue_index] << F(" on index ") << address_queue_index << F(" is ON ") << endl;
+    digitalWrite(DHD_Chevron_LED[address_queue_index], HIGH);
   }else{
-    Serial << F("- Skipping RED button LED at this stage") << endl;
+    Serial << F("- Skipping RED button LED at this stage, to be turned on only when last chevron is in") << endl;
   }
+
+  Serial << F("* Send push button to MP3") << endl;
+  i2c_message_mp3_out.action = address_queue_index + 6; // offset 6 becouse thats where first button soudn starts
+  i2c_message_mp3_out.chevron = 0;
+  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   Serial << F("* Send symbol comand to gate") << endl;
   i2c_message_gate_out.action = address_queue_index+1;
@@ -201,7 +227,7 @@ void processKey(uint8_t symbol){
     }
     if (! addrvalid){
       Serial << F("- Address is INVALID") << endl;
-      resetDial();
+      resetDHD();
       return;
     }
   }
@@ -253,23 +279,27 @@ void i2c_recieve_gate(){
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_START){
     DEBUG_I2C_GATE_DEV << F("i Recieved dial start of chevron: ") << i2c_message_gate_recieve.chevron << endl;
-    Serial << F("* Send gate dial start to MP3") << endl;
-    i2c_message_mp3_out.action = MP3_GATE_DIALING;
-    i2c_message_mp3_out.chevron = 0;
-    i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
+    // TODO: ?
+
+    //Serial << F("* Send gate dial start to MP3") << endl;
+    //i2c_message_mp3_out.action = MP3_GATE_DIALING;
+    //i2c_message_mp3_out.chevron = 0;
+    //i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_END){
     DEBUG_I2C_GATE_DEV << F("i Recieved dial end") << endl;
-    Serial << F("* Send chevron seal") << endl;
-    i2c_message_mp3_out.action = MP3_CHEVRON_SEAL;
-    i2c_message_mp3_out.chevron = 0;
-    i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
+    // TODO: ?
+
+    //Serial << F("* Send chevron seal") << endl;
+    //i2c_message_mp3_out.action = MP3_CHEVRON_SEAL;
+    //i2c_message_mp3_out.chevron = 0;
+    //i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_NODATA){
     DEBUG_I2C_GATE_DEV << F("i No data recieved from gate!") << endl;
 
   } else {
-    Serial << F("Recieved: ") << i2c_message_gate_recieve.action << F("/") << i2c_message_gate_recieve.chevron << endl;
+    Serial << F("!!! Recieved unknown message: ") << i2c_message_gate_recieve.action << F("/") << i2c_message_gate_recieve.chevron << endl;
 
   }
 }

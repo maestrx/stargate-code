@@ -17,7 +17,6 @@ ArduinoQueue<i2c_message> i2c_message_queue_out(32);
 
 // timing of the gate reset
 unsigned long address_last_key_millis = 0;
-const long address_key_input_timeout = 10000;
 
 // mp3 player object
 DFRobotDFPlayerMini MP3player;
@@ -29,7 +28,7 @@ StepperMotor *motor_chevron = cnc_shield.get_motor(1);
 
 // variable containing the ID of symbol that is being currently dialed
 uint8_t current_symbol;
-
+bool gate_wormhole_established = false;
 
 void setup(){
   // init local serial
@@ -50,13 +49,9 @@ void setup(){
 
   // set voluem for the mp3 player
   Serial << F("* MP3 volume set") << endl;
-  #ifdef FAKE_GATE
-    MP3player.volume(15);  //Set volume value. From 0 to 30
-  #else
-    MP3player.volume(30);  //Set volume value. From 0 to 30
-  #endif
+  MP3player.volume(MP3_VOLUME);  //Set volume value. From 0 to 30
 
-  // inti i2c comms
+  // Init I2C bus
   Serial << F("* I2C init") << endl;
   Wire.begin(8);                  // Start the I2C Bus as SLAVE on address 8
   Wire.onReceive(i2c_recieve);
@@ -71,7 +66,7 @@ void setup(){
     pinMode(Calibrate_Resistor, INPUT);
   #endif
   for (int i = 0; i < 9; i ++){
-    pinMode(Chevron_LED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
+    pinMode(Gate_Chevron_LED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
   }
 
   // init motors and set to max speed
@@ -80,9 +75,11 @@ void setup(){
   motor_gate->set_speed(1000);
   motor_chevron->set_speed(1000);
 
+  // reset teh game to default
   Serial << F("* Gate reset") << endl;
   resetGate();
 
+  // gate ready
   Serial << F("+++ Setup done") << endl;
 }
 
@@ -92,7 +89,7 @@ void loop(){
   process_in_queue();
 
   // reset the gate to default in case no command was recieved in defined timeframe
-  if (address_last_key_millis > 0 && millis() - address_last_key_millis > address_key_input_timeout){
+  if (address_last_key_millis > 0 && millis() - address_last_key_millis > GATE_ACTION_TIMEOUT){
     Serial << F("- Gate timeout. Doing reset!") << endl;
     resetGate();
   }
@@ -101,6 +98,8 @@ void loop(){
 // dial/turn the gate
 // executed when dial command recieved via I2C
 void dial(){
+  Serial << F("+++ gate dial") << endl;
+
   // internal variables
   uint8_t dial_direction;
   uint8_t steps;
@@ -157,22 +156,34 @@ void dial(){
 
   // set current symbol for next dialing
   current_symbol = i2c_message_in.chevron;
-  Serial << F("* current_symbol after: ") << current_symbol  << endl;
+  Serial << F("* current_symbol after: ") << current_symbol << endl;
+  Serial << F("--- gate dial end") << endl;
 }
 
-
+// reset gate to initial position
 void resetGate(){
-  Serial << F("--- Address sequence reset") << endl;
+  Serial << F("+++ Gate reset") << endl;
+
+  if (gate_wormhole_established){
+    Serial << F("* Gate reset, closing wormhole") << endl;
+    MP3player.stop();
+    MP3player.play(MP3_WORMHOLE_STOP);
+    delay(1000);
+  }
+  gate_wormhole_established = false;
+
+  // reset key timeout timer
   address_last_key_millis = 0;
 
   // turn off all LEDs
+  Serial << F("* Turn off all LEDs") << endl;
   digitalWrite(Ramp_LED, LOW);
-  for (int tmp_chevron = 0; tmp_chevron < 9; tmp_chevron ++){
-    digitalWrite(Chevron_LED[tmp_chevron], LOW);
+  for (int i = 0; i < 9; i ++){
+    digitalWrite(Gate_Chevron_LED[i], LOW);
   }
 
   // rotate symbols to the initial position
-  Serial << F("Calib LED ON") << endl;
+  Serial << F("* Calib LED ON, dialing to default position") << endl;
   digitalWrite(Calibrate_LED, HIGH);
   cnc_shield.enable();
   #ifdef FAKE_GATE
@@ -184,89 +195,126 @@ void resetGate(){
    #endif
 
     int calib = analogRead(Calibrate_Resistor);
-    // Serial << F("Calib LED read:") << calib << endl;
     #ifdef FAKE_GATE
       if (calib>99){
     #else
       if (calib>3){
     #endif
-        Serial << F("Calib steps:") << i << endl;
+        Serial << F("* Calib steps:") << i << endl;
         break;
       }
   }
 
   digitalWrite(Calibrate_LED, LOW);
   #ifdef FAKE_GATE
-    Serial << F("Shift gate by 4 to make 1 on teh top") << endl;
+    Serial << F("* Shift gate by 4 to make 1 on teh top") << endl;
     motor_gate->step(GATE_CHEVRON_STEPS * 4, CLOCKWISE);
   #else
     cnc_shield.disable();
   #endif
 
+  // empty incoming message queue
+  while (i2c_message_queue_in.itemCount()) {
+    i2c_message_queue_in.dequeue();
+  }
+
   // set current symbol on the top of the gate
   current_symbol = 1;
+
+  Serial << F("--- Gate reset done") << endl;
 }
 
+// process the incoming I2C message queue from DHD
 void process_in_queue(){
+
+  // in case tehre are some messages in teh queue
   if (i2c_message_queue_in.itemCount()) {
 
+    // pop the message from the queue
+    Serial << F("* Processing message from DHD") << endl;
     i2c_message_in = i2c_message_queue_in.dequeue();
     Serial << F("* Message details:") << i2c_message_in.action << F("/") << i2c_message_in.chevron << endl;
 
-    // incoming dial chevron
+    // incoming dial chevron (1-7)
     if (i2c_message_in.action > 0 and i2c_message_in.action < 8){
-      Serial << F("* Sending dial started") << endl;
+
+      Serial << F("+++ Recieved dial message #") << i2c_message_in.action << endl;
+
+      // send dial start event to dhd
+      Serial << F("* Sending dial started message to DHD") << endl;
       i2c_message_out.action = ACTION_DIAL_START;
       i2c_message_out.chevron = i2c_message_in.chevron;
       i2c_message_queue_out.enqueue(i2c_message_out);
 
-      // do the dial
+      // do the gate dial
       dial();
 
-      // do chevron sound
+      // send dial done event to dhd
       Serial << F("* Sending dial done") << endl;
       i2c_message_out.action = ACTION_DIAL_END;
       i2c_message_out.chevron = i2c_message_in.chevron;
       i2c_message_queue_out.enqueue(i2c_message_out);
-      digitalWrite(Chevron_LED[i2c_message_in.action-1], HIGH);
+
+      // lit LED on the gate
+      digitalWrite(Gate_Chevron_LED[i2c_message_in.action-1], HIGH);
 
       delay(3000);
 
     // valid address entered, establish gate
     } else if (i2c_message_in.action == ACTION_ADDR_VALID){
+      // TODO: implement gate wormhole establishment
+      Serial << F("+++ addr valid, start wormhole") << endl;
+      MP3player.stop();
+      MP3player.play(MP3_WORMHOLE_START);
+      delay(1000);
+      MP3player.play(MP3_WORMHOLE_RUNNING);
+      gate_wormhole_established = true;
 
     // INVALID address entered, reset gate
     } else if (i2c_message_in.action == ACTION_ADDR_INVALID){
+      Serial << F("+++ addr invalid, fail dial") << endl;
+      // TODO: implement gate dial failure
+      MP3player.stop();
+      MP3player.play(MP3_UNKNOWN);
 
     // reset gate (after stop button ?)
     } else if (i2c_message_in.action == ACTION_GATE_RESET){
-      Serial << F("- reset dial recieved") << endl;
+      Serial << F("+++ reset dial recieved") << endl;
       resetGate();
+
     }
-
   }
-
 }
 
+// recieve incoming message from DHD and put it into the incoming queue
 void i2c_recieve() {
   DEBUG_I2C_DEV << F("i I2C recieve") << endl;
   while (Wire.available()) {
     Wire.readBytes((byte*)&i2c_message_recieve, sizeof(i2c_message));
   }
   DEBUG_I2C_DEV << F("i Recieved message:") << i2c_message_recieve.action << F("/") << i2c_message_recieve.chevron << endl;
+  // if message is gate reset, than clear the queue and add only reset message
+  if (i2c_message_recieve.action == ACTION_GATE_RESET){
+    Serial << F("- reset command recieved, wiping in queue") << endl;
+    while (i2c_message_queue_in.itemCount()) {
+      i2c_message_queue_in.dequeue();
+    }
+  }
   i2c_message_queue_in.enqueue(i2c_message_recieve);
 }
 
+// respond to the I2C message poll by DHD
 void i2c_send(){
+  // if tehre is a message, send it
   if (i2c_message_queue_out.itemCount()) {
     DEBUG_I2C_DEV << F("i Sending message from the queue") << endl;
     i2c_message_send = i2c_message_queue_out.dequeue();
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
+
+  // otherwise send NOOP message
   }else{
     DEBUG_I2C_DEV << F("i Sending NOOP response ") << endl;
     i2c_message_send.action = ACTION_NOOP;
     Wire.write((byte *)&i2c_message_send, sizeof(i2c_message));
   }
-
 }
-
