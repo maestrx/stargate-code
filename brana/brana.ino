@@ -12,14 +12,15 @@
 #include <CNCShield.h>
 #include <DFRobotDFPlayerMini.h>
 
+// i2c objects to read and send messages
 i2c_message i2c_message_send;
 i2c_message i2c_message_recieve;
 i2c_message i2c_message_out;
 i2c_message i2c_message_in;
 
+// queus for i2c messages
 ArduinoQueue<i2c_message> i2c_message_queue_in(32);
 ArduinoQueue<i2c_message> i2c_message_queue_out(32);
-
 
 // timing of the gate reset
 unsigned long address_last_key_millis = 0;
@@ -36,11 +37,14 @@ StepperMotor *motor_chevron = cnc_shield.get_motor(1);
 // variable containing the ID of symbol that is being currently dialed
 uint8_t current_symbol;
 
+
 void setup(){
+  // init local serial
   Serial.begin(115200);
   while(!Serial);
   Serial << F("+++ Setup start") << endl;
 
+  // init gate mp3 player
   Serial1.begin(9600);
   while(!Serial1);
   Serial << F("Initializing DFPlayer ... (May take 3~5 seconds)") << endl;
@@ -50,54 +54,70 @@ void setup(){
       delay(0);
     }
   }
-#ifdef FAKE_GATE
-  MP3player.volume(15);  //Set volume value. From 0 to 30
-#else
-  MP3player.volume(30);  //Set volume value. From 0 to 30
-#endif
 
+  // set voluem for the mp3 player
+  Serial << F("* MP3 volume set") << endl;
+  #ifdef FAKE_GATE
+    MP3player.volume(15);  //Set volume value. From 0 to 30
+  #else
+    MP3player.volume(30);  //Set volume value. From 0 to 30
+  #endif
+
+  // inti i2c comms
+  Serial << F("* I2C init") << endl;
   Wire.begin(8);                  // Start the I2C Bus as SLAVE on address 8
   Wire.onReceive(i2c_recieve);
   Wire.onRequest(i2c_send);
 
+  // set pin modes
+  Serial << F("* Set PIN modes") << endl;
   pinMode(Calibrate_LED, OUTPUT);
   #ifdef FAKE_GATE
     pinMode(Calibrate_Resistor, INPUT_PULLUP);
   #else
     pinMode(Calibrate_Resistor, INPUT);
   #endif
-  Serial << F("* LED mode set") << endl;
   for (int i = 0; i < 9; i ++){
     pinMode(Chevron_LED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
   }
 
+  // init motors and set to max speed
   Serial << F("* CNC enable") << endl;
   cnc_shield.begin();
-  motor_gate->set_speed(SPEED_STEPS_PER_SECOND);
-  motor_chevron->set_speed(SPEED_STEPS_PER_SECOND);
+  motor_gate->set_speed(1000);
+  motor_chevron->set_speed(1000);
 
+  Serial << F("* Gate reset") << endl;
   resetGate();
 
-  Serial << F("* Setup done") << endl;
+  Serial << F("+++ Setup done") << endl;
 }
 
+// main loop
 void loop(){
+  // check if there are any recieved I2C messages in the input queue
   process_in_queue();
 
+  // reset the gate to default in case no command was recieved in defined timeframe
   if (address_last_key_millis > 0 && millis() - address_last_key_millis > address_key_input_timeout){
-    // timeout
-    Serial << F("- Gate timeout") << endl;
+    Serial << F("- Gate timeout. Doing reset!") << endl;
     resetGate();
   }
 }
 
+// dial/turn the gate
+// executed when dial command recieved via I2C
 void dial(){
+  // internal variables
   uint8_t dial_direction;
   uint8_t steps;
+
+  // determine the direction of the dial and numebr of chevrons to rotate
   Serial << F("* dial action: i2c_message_in.action") << endl;
   if ((i2c_message_in.action % 2) != 0){ // if dial symbol is even, rotate symbols left
     dial_direction = CLOCKWISE; // dial rotation is opposit to the direction of the symbol !!!
     Serial << F("* dial directon:CLOCKWISE symbol direction:COUNTER current_symbol:") << current_symbol << F(" i2c_message_in.chevron:") << i2c_message_in.chevron << endl;
+    // determine the number of steps to rotate
     if ( current_symbol < i2c_message_in.chevron ){
       steps = GATE_SYMBOLS - i2c_message_in.chevron + current_symbol;
       Serial << F("* dial crossing top: 39 - i2c_message_in.chevron + current_symbol = ") << steps << F(" steps") << endl;
@@ -109,6 +129,7 @@ void dial(){
   }else{
     dial_direction = COUNTER; // dial rotation is opposit to the direction of the symbol !!!
     Serial << F("* dial directon:COUNTER symbol direction:CLOCKWISE current_symbol:") << current_symbol << F(" i2c_message_in.chevron:") << i2c_message_in.chevron << endl;
+    // determine the number of steps to rotate
     if ( current_symbol < i2c_message_in.chevron ){
       steps = i2c_message_in.chevron - current_symbol;
       Serial << F("* dial not crossing top: i2c_message_in.chevron - current_symbol = ") << steps << F(" steps") << endl;
@@ -119,30 +140,33 @@ void dial(){
 
   }
 
-  // play sounds for the DHD button
+  // play gate rotate sound
   Serial << F("* Play gate dial sound") << endl;
   MP3player.stop();
   MP3player.play(1);
 
-  // dial the gate
+  // rotate the gate
   Serial << F("* Dialing the gate") << endl;
   cnc_shield.enable();
   motor_gate->step(GATE_CHEVRON_STEPS * steps, dial_direction);
 
+  // play sound for teh chevron seal
   Serial << F("* Play chevron seal sound") << endl;
   MP3player.stop();
   MP3player.play(2);
 
+  // while chevron seal sound id being played, seal the chevron
   Serial << F("* Sealing chevron") << endl;
   motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
   delay(500);
   motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
   cnc_shield.disable();
 
+  // set current symbol for next dialing
   current_symbol = i2c_message_in.chevron;
   Serial << F("* current_symbol after: ") << current_symbol  << endl;
-
 }
+
 
 void resetGate(){
   Serial << F("--- Address sequence reset") << endl;
