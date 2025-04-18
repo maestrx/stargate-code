@@ -63,9 +63,11 @@ void setup(){
   Wire.begin();
   t.every(500, i2c_send_gate);
   delay(100);
-  //t.every(500, i2c_recieve_gate);
+  t.every(500, i2c_recieve_gate);
+  delay(100);
   t.every(500, i2c_send_mp3);
-  //t.every(500, i2c_recieve_mp3);
+  delay(100);
+  t.every(500, i2c_recieve_mp3);
   //t.every(5000, i2c_check_timeout);
 
   // reset teh game to default
@@ -96,11 +98,11 @@ void loop(){
   }
 
   // reset the DHD to default in case no keypress was recieved in defined timeframe-
-  if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
-    Serial << F("- Timeout: ") << (millis() - address_last_key_millis) << endl;
-    Serial << F("- Key press timeout. Doing reset!") << endl;
-    resetDHD();
-  }
+  //if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
+  //  Serial << F("- Timeout: ") << (millis() - address_last_key_millis) << endl;
+  //  Serial << F("- Key press timeout. Doing reset!") << endl;
+  //  resetDHD();
+  //}
 }
 
 void resetDHD(){
@@ -130,7 +132,7 @@ void resetDHD(){
 
 
 void i2c_send_gate(){
-  DEBUG_I2C_GATE_DEV << F("i Checking game out queue") << endl;
+  DEBUG_I2C_GATE_DEV << F("i Checking gate out queue") << endl;
   if (i2c_message_queue_gate_out.itemCount()) {
     DEBUG_I2C_GATE_DEV << F("i Sending message from the queue to gate") << endl;
     i2c_message_gate_send = i2c_message_queue_gate_out.dequeue();
@@ -139,7 +141,7 @@ void i2c_send_gate(){
     Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
     Wire.endTransmission();
   }
-  DEBUG_I2C_GATE_DEV << F("i Checking game out queue END") << endl;
+  DEBUG_I2C_GATE_DEV << F("i Checking gate out queue END") << endl;
 }
 
 void i2c_send_mp3(){
@@ -179,9 +181,9 @@ void i2c_recieve_gate(){
     // TODO: ?
 
     //Serial << F("* Send gate dial start to MP3") << endl;
-    //i2c_message_mp3_out.action = MP3_GATE_DIALING;
-    //i2c_message_mp3_out.chevron = 0;
-    //i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
+    i2c_message_mp3_out.action = MP3_GATE_DIALING;
+    i2c_message_mp3_out.chevron = 0;
+    i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_END){
     DEBUG_I2C_GATE_DEV << F("i Recieved dial end: ") << i2c_message_gate_recieve.chevron << endl;
@@ -192,9 +194,9 @@ void i2c_recieve_gate(){
     // TODO: ?
 
     //Serial << F("* Send chevron seal") << endl;
-    //i2c_message_mp3_out.action = MP3_CHEVRON_SEAL;
-    //i2c_message_mp3_out.chevron = 0;
-    //i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
+    i2c_message_mp3_out.action = MP3_CHEVRON_SEAL;
+    i2c_message_mp3_out.chevron = 0;
+    i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_NODATA){
     DEBUG_I2C_GATE_DEV << F("i No data recieved from gate!") << endl;

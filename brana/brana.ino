@@ -271,7 +271,7 @@ void process_in_queue(){
 // recieve incoming message from DHD and put it into the incoming queue
 void i2c_recieve() {
   DEBUG_I2C_DEV << F("i I2C recieve") << endl;
-  while (Wire.available()) {
+  while (Wire.available() >= sizeof(i2c_message)) {
     Wire.readBytes((byte*)&i2c_message_recieve, sizeof(i2c_message));
   }
   DEBUG_I2C_DEV << F("i Recieved message:") << i2c_message_recieve.action << F("/") << i2c_message_recieve.chevron << endl;
