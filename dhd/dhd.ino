@@ -9,13 +9,13 @@
 i2c_message i2c_message_gate_send;
 i2c_message i2c_message_gate_recieve;
 i2c_message i2c_message_gate_out;
-ArduinoQueue<i2c_message> i2c_message_queue_gate_out(8);
+ArduinoQueue<i2c_message> i2c_message_queue_gate_out(16);
 
 // i2c objects to read and send messages with MP3
 i2c_message i2c_message_mp3_send;
 i2c_message i2c_message_mp3_recieve;
 i2c_message i2c_message_mp3_out;
-ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(8);
+ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(16);
 
 // I2C timeout variables
 unsigned long i2c_gate_last_alive = 0;
@@ -31,22 +31,14 @@ unsigned long address_last_key_millis = 0;
 unsigned long address_reset_key_millis = 0;
 
 // variables to store pressed symbols and process them
-int address_queue[8];           // 7 symbols, 8th is red
-int address_queue_index = 0;    // index of the last symbol in the address queue
+uint8_t address_queue[10];           // 7 symbols, 8th is red
+uint8_t address_queue_index = 0;    // index of the last symbol in the address queue
 
 // list of valida addresses
-int valid_address_list[][7] = {
+uint8_t valid_address_list[][7] = {
   {27,7 ,15,32,12,30,1 },   // Abydos
   {7 ,16,24,28,6 ,10,1 },   // Test
-  {27,7 ,15,32,12,30,1 },   // Abydos
-  {7 ,16,24,28,6 ,10,1 },   // Test
-  {27,7 ,15,32,12,30,1 },   // Abydos
-  {7 ,16,24,28,6 ,10,1 },   // Test
-  {27,7 ,15,32,12,30,1 },   // Abydos
-  {7 ,16,24,28,6 ,10,1 },   // Test
-  {27,7 ,15,32,12,30,1 },   // Abydos
-  {7 ,16,24,28,6 ,10,1 },   // Test
-  {1,2 ,3,4,5,6,7 },        // bluetooth test
+  {34,1 ,33,2,32,39,31 },        // bluetooth test
 };
 
 
@@ -58,11 +50,11 @@ void setup(){
   // set pin modes
   pinMode(KEYPAD_INPUT, INPUT);
   Serial << F("* Set PIN modes") << endl;
-  for (int i = 0; i < 9; i ++){
+  for (int i = 0; i < 8; i ++){
     pinMode(DHD_Chevron_LED[i], OUTPUT); // make the DHD LED pins outputs
   }
   Serial << F("* LED OFF") << endl;
-  for (int i = 0; i < 9; i ++){
+  for (int i = 0; i < 8; i ++){
     digitalWrite(DHD_Chevron_LED[i], LOW);  // turn all LEDs off
   }
 
@@ -70,13 +62,14 @@ void setup(){
   Serial << F("* I2C init") << endl;
   Wire.begin();
   t.every(500, i2c_send_gate);
-  t.every(500, i2c_recieve_gate);
+  delay(100);
+  //t.every(500, i2c_recieve_gate);
   t.every(500, i2c_send_mp3);
-  t.every(500, i2c_recieve_mp3);
-  t.every(5000, i2c_check_timeout);
+  //t.every(500, i2c_recieve_mp3);
+  //t.every(5000, i2c_check_timeout);
 
   // reset teh game to default
-  Serial << F("* HDH reset") << endl;
+  Serial << F("* DHD reset") << endl;
   resetDHD();
 
   // DHD ready
@@ -102,8 +95,9 @@ void loop(){
     }
   }
 
-  // reset the DHD to default in case no keypress was recieved in defined timeframe
+  // reset the DHD to default in case no keypress was recieved in defined timeframe-
   if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
+    Serial << F("- Timeout: ") << (millis() - address_last_key_millis) << endl;
     Serial << F("- Key press timeout. Doing reset!") << endl;
     resetDHD();
   }
@@ -119,7 +113,7 @@ void resetDHD(){
 
   // turn off all LEDs
   Serial << F("* Turn off all LEDs") << endl;
-  for (int i = 0; i < 9; i ++){
+  for (int i = 0; i < 8; i ++){
     digitalWrite(DHD_Chevron_LED[i], LOW);
   }
 
@@ -136,18 +130,20 @@ void resetDHD(){
 
 
 void i2c_send_gate(){
+  DEBUG_I2C_GATE_DEV << F("i Checking game out queue") << endl;
   if (i2c_message_queue_gate_out.itemCount()) {
     DEBUG_I2C_GATE_DEV << F("i Sending message from the queue to gate") << endl;
     i2c_message_gate_send = i2c_message_queue_gate_out.dequeue();
-    Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
     DEBUG_I2C_GATE_DEV << F("i Sending data to gate") << endl;
     Wire.beginTransmission(8);
     Wire.write((byte *)&i2c_message_gate_send, sizeof(i2c_message));
     Wire.endTransmission();
   }
+  DEBUG_I2C_GATE_DEV << F("i Checking game out queue END") << endl;
 }
 
 void i2c_send_mp3(){
+  DEBUG_I2C_MP3_DEV << F("i Checking MP3 out queue") << endl;
   if (i2c_message_queue_mp3_out.itemCount()) {
     DEBUG_I2C_MP3_DEV << F("i Sending message from the queue to mp3") << endl;
     i2c_message_mp3_send = i2c_message_queue_mp3_out.dequeue();
@@ -156,15 +152,19 @@ void i2c_send_mp3(){
     Wire.write((byte *)&i2c_message_mp3_send, sizeof(i2c_message));
     Wire.endTransmission();
   }
+  DEBUG_I2C_MP3_DEV << F("i Checking MP3 out queue END") << endl;
 }
 
 void i2c_recieve_gate(){
   i2c_message_gate_recieve.action = ACTION_NODATA;
   DEBUG_I2C_GATE_DEV << F("i Requesting data from gate") << endl;
   Wire.requestFrom(8, sizeof(i2c_message));
-  if (Wire.available()){
+  if (Wire.available() >= sizeof(i2c_message)){
     Wire.readBytes((byte*)&i2c_message_gate_recieve, sizeof(i2c_message));
+  }else{
+    DEBUG_I2C_GATE_DEV << F("!!! No data available from gate!!!") << endl;
   }
+
   DEBUG_I2C_GATE_DEV << F("i MSG gate:") << i2c_message_gate_recieve.action << endl;
   if (i2c_message_gate_recieve.action == ACTION_NOOP){
     DEBUG_I2C_GATE_DEV << F("i Recieved keepalive from gate") << endl;
@@ -208,9 +208,11 @@ void i2c_recieve_gate(){
 void i2c_recieve_mp3(){
   i2c_message_mp3_recieve.action = ACTION_NODATA;
   DEBUG_I2C_MP3_DEV << F("i Requesting data from mp3") << endl;
-  Wire.requestFrom(8, sizeof(i2c_message));
-  if (Wire.available()){
+  Wire.requestFrom(9, sizeof(i2c_message));
+  if (Wire.available() >= sizeof(i2c_message)){
     Wire.readBytes((byte*)&i2c_message_mp3_recieve, sizeof(i2c_message));
+  }else{
+    DEBUG_I2C_GATE_DEV << F("!!! No data available from gate!!!") << endl;
   }
   DEBUG_I2C_MP3_DEV << F("i MSG mp3:") << i2c_message_mp3_recieve.action << endl;
   if (i2c_message_mp3_recieve.action == ACTION_NOOP){
