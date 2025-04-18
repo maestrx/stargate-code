@@ -60,11 +60,7 @@ void setup(){
   // set pin modes
   Serial << F("* Set PIN modes") << endl;
   pinMode(Calibrate_LED, OUTPUT);
-  #ifdef FAKE_GATE
-    pinMode(Calibrate_Resistor, INPUT_PULLUP);
-  #else
-    pinMode(Calibrate_Resistor, INPUT);
-  #endif
+  pinMode(Calibrate_Resistor, INPUT);
   for (int i = 0; i < 9; i ++){
     pinMode(Gate_Chevron_LED[i], OUTPUT);   // turn GPIO pins 2 thru 9 to outputs
   }
@@ -149,9 +145,9 @@ void dial(){
 
   // while chevron seal sound id being played, seal the chevron
   Serial << F("* Sealing chevron") << endl;
-  //motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
-  //delay(500);
-  //motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
+  motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
+  delay(500);
+  motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
   cnc_shield.disable();
 
   // set current symbol for next dialing
@@ -185,33 +181,19 @@ void resetGate(){
   // rotate symbols to the initial position
   Serial << F("* Calib LED ON (PIN ") << Calibrate_LED << F("), dialing to default position") << endl;
   digitalWrite(Calibrate_LED, HIGH);
+  delay(100);
   cnc_shield.enable();
-  #ifdef FAKE_GATE
-    for (int i=0;i<5000;i++){
-      motor_gate->step(3, CLOCKWISE);
-   #else
-    for (int i=0;i<1000;i++){
-      motor_gate->step(15, CLOCKWISE);
-   #endif
-
+  for (int i=0;i<2000;i++){
     int calib = analogRead(Calibrate_Resistor);
-    #ifdef FAKE_GATE
-      if (calib>99){
-    #else
-      if (calib>3){
-    #endif
-        Serial << F("* Calib steps:") << i << endl;
-        break;
-      }
+    if (calib>3){
+      Serial << F("* Calib steps:") << i << endl;
+      break;
+    }
+    motor_gate->step(5, CLOCKWISE);
   }
 
   digitalWrite(Calibrate_LED, LOW);
-  #ifdef FAKE_GATE
-    Serial << F("* Shift gate by 4 to make 1 on teh top") << endl;
-    motor_gate->step(GATE_CHEVRON_STEPS * 4, CLOCKWISE);
-  #else
-    cnc_shield.disable();
-  #endif
+  cnc_shield.disable();
 
   // empty incoming message queue
   while (i2c_message_queue_in.itemCount()) {

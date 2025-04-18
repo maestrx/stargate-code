@@ -13,14 +13,10 @@ i2c_message i2c_message_in;
 
 // queus for i2c messages
 ArduinoQueue<i2c_message> i2c_message_queue_in(16);
-ArduinoQueue<i2c_message> i2c_message_queue_out(4);
+ArduinoQueue<i2c_message> i2c_message_queue_out(16);
 
 // mp3 player object
-#ifdef FAKE_GATE
-SoftwareSerial MP3Serial(/*rx =*/10, /*tx =*/11);
-#else
 SoftwareSerial MP3Serial(/*rx =*/3, /*tx =*/2);
-#endif
 DFRobotDFPlayerMini MP3player;
 
 void setup() {

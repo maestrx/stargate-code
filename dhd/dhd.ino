@@ -9,13 +9,13 @@
 i2c_message i2c_message_gate_send;
 i2c_message i2c_message_gate_recieve;
 i2c_message i2c_message_gate_out;
-ArduinoQueue<i2c_message> i2c_message_queue_gate_out(4);
+ArduinoQueue<i2c_message> i2c_message_queue_gate_out(8);
 
 // i2c objects to read and send messages with MP3
 i2c_message i2c_message_mp3_send;
 i2c_message i2c_message_mp3_recieve;
 i2c_message i2c_message_mp3_out;
-ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(4);
+ArduinoQueue<i2c_message> i2c_message_queue_mp3_out(8);
 
 // I2C timeout variables
 unsigned long i2c_gate_last_alive = 0;
@@ -26,14 +26,9 @@ const uint16_t i2c_timeout = 5000;
 
 Timer t;
 
-// Connect Bluetooth to the DHD for symbol input
-#ifdef FAKE_GATE
-#include <SoftwareSerial.h>
-SoftwareSerial bluetooth(11, 10);
-#endif
-
 // timing of the dhd key input reset
 unsigned long address_last_key_millis = 0;
+unsigned long address_reset_key_millis = 0;
 
 // variables to store pressed symbols and process them
 int address_queue[8];           // 7 symbols, 8th is red
@@ -59,12 +54,6 @@ void setup(){
   Serial.begin(115200);
   while(!Serial);
   Serial << F("+++ Setup start") << endl;
-
-  // Init bluetooth
-  #ifdef FAKE_GATE
-  bluetooth.begin(9600);
-  while(!bluetooth);
-  #endif
 
   // set pin modes
   pinMode(KEYPAD_INPUT, INPUT);
@@ -113,22 +102,6 @@ void loop(){
     }
   }
 
-  // process the bluetooth input
-  #ifdef FAKE_GATE
-  if (bluetooth.available() > 0) {
-    uint8_t inchar = bluetooth.read();
-    if (48 <= inchar and inchar <= 57){
-      Serial << F("In charX:") << inchar << endl;
-      uint8_t code = inchar - 48;
-      if (inchar == 48){
-        code = 99;
-      }
-      Serial << F("Button code: ") << code << endl;
-      processKey(code);
-    }
-  }
-  #endif
-
   // reset the DHD to default in case no keypress was recieved in defined timeframe
   if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
     Serial << F("- Key press timeout. Doing reset!") << endl;
@@ -141,6 +114,7 @@ void resetDHD(){
 
   // reset key timeout timer
   address_last_key_millis = 0;
+  address_reset_key_millis = 0;
   address_queue_index = 0;
 
   // turn off all LEDs
@@ -154,87 +128,10 @@ void resetDHD(){
   i2c_message_gate_out.chevron = 0;
   i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
 
+  digitalWrite(DHD_Chevron_LED[7], HIGH);
+  delay(1000);
+  digitalWrite(DHD_Chevron_LED[7], LOW);
   Serial << F("--- DHD reset done") << endl;
-}
-
-void processKey(uint8_t symbol){
-  Serial << F("* address_queue_index:") << address_queue_index << endl;
-  Serial << F("* symbol:") << symbol << endl;
-
-  if (address_queue_index > 7){ // ignore if anything after 7th symbol and red button
-    Serial << F("* ignoring after 7th index:") << address_queue_index << endl;
-    address_last_key_millis = millis();
-    return;
-  } else if (address_queue_index == 7 and symbol != 99){ // ignore if anything else than red button after 7th symbol
-    Serial << F("* ignoring 7th index if not red:") << address_queue_index << F(" Symbol:") << symbol << endl;
-    address_last_key_millis = millis();
-    return;
-  }else if (address_queue_index != 7 and symbol == 99){
-    Serial << F("* ignoring red if not 7th index:") << address_queue_index << F(" Symbol:") << symbol << endl;
-    address_last_key_millis = millis();
-    return; // ignore red button if not after 7th symbol
-  }
-
-  // check if symbol not already in the address queue
-  for (int i = 0; i < address_queue_index; i++){
-    if (address_queue[i] == symbol){
-      Serial << F("* ignoring duplicate symbol: ") << symbol << endl;
-      address_last_key_millis = millis();
-      return;
-    }
-  }
-
-  if (address_queue_index < 7){
-    Serial << F("* LED ID: ") << DHD_Chevron_LED[address_queue_index] << F(" on index ") << address_queue_index << F(" is ON ") << endl;
-    digitalWrite(DHD_Chevron_LED[address_queue_index], HIGH);
-  }else{
-    Serial << F("- Skipping RED button LED at this stage, to be turned on only when last chevron is in") << endl;
-  }
-
-  Serial << F("* Send push button to MP3") << endl;
-  i2c_message_mp3_out.action = address_queue_index + 6; // offset 6 becouse thats where first button soudn starts
-  i2c_message_mp3_out.chevron = 0;
-  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
-
-  Serial << F("* Send symbol comand to gate") << endl;
-  i2c_message_gate_out.action = address_queue_index+1;
-  i2c_message_gate_out.chevron = symbol;
-  i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
-
-  Serial << F("* Add symbol:") << symbol << F(" to address queue at index:") << address_queue_index << endl;
-  address_queue[address_queue_index] = symbol;
-
-  if (address_queue_index == 7){
-    // check if the address is valid
-    Serial << F("* Verifying that the complete address is valid") << endl;
-    bool addrvalid = false;
-    for (int i = 0; i < sizeof(valid_address_list) / sizeof(valid_address_list[0]); i++){
-      //Serial << F("* Comparing address: ") << address_queue[0] << F(":") << address_queue[1] << F(":") << address_queue[2] << F(":") << address_queue[3] << F(":") << address_queue[4] << F(":") << address_queue[5] << F(":") << address_queue[6] << F(":") << endl;
-      //Serial << F("* Comparing address: ") << valid_address_list[i][0] << F(":") << valid_address_list[i][1] << F(":") << valid_address_list[i][2] << F(":") << valid_address_list[i][3] << F(":") << valid_address_list[i][4] << F(":") << valid_address_list[i][5] << F(":") << valid_address_list[i][6] << F(":") << endl;
-      bool valid = true;
-      for (int j = 0; j < 7; j++){
-        if (address_queue[j] != valid_address_list[i][j]){
-          // Serial << F("- addr symbol is invalid: ") << address_queue[j] << F("<>") << valid_address_list[i][j] << endl;
-          valid = false;
-        }
-      }
-      if (valid){
-          // valid address
-          Serial << F("* Address is valid") << endl;
-          addrvalid = true;
-          break;
-      }
-    }
-    if (! addrvalid){
-      Serial << F("- Address is INVALID") << endl;
-      resetDHD();
-      return;
-    }
-  }
-
-  address_queue_index += 1;
-  Serial << F("* New address index:") << address_queue_index << endl;
-  address_last_key_millis = millis();
 }
 
 
@@ -287,7 +184,11 @@ void i2c_recieve_gate(){
     //i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_END){
-    DEBUG_I2C_GATE_DEV << F("i Recieved dial end") << endl;
+    DEBUG_I2C_GATE_DEV << F("i Recieved dial end: ") << i2c_message_gate_recieve.chevron << endl;
+
+    // reset the DHD timeout
+    address_last_key_millis = millis();
+
     // TODO: ?
 
     //Serial << F("* Send chevron seal") << endl;
@@ -319,10 +220,12 @@ void i2c_recieve_mp3(){
       DEBUG_I2C_GATE_DEV << F("i I2C connection with mp3 restored!") << endl;
     }
     i2c_mp3_alive = true;
+
   } else if ( i2c_message_mp3_recieve.action == ACTION_NODATA){
     DEBUG_I2C_MP3_DEV << F("i No data recieved from mp3!") << endl;
+
   } else {
-    Serial << F("Recieved: ") << i2c_message_mp3_recieve.action << F("/") << i2c_message_mp3_recieve.chevron << endl;
+    Serial << F("Recieved MP3: ") << i2c_message_mp3_recieve.action << F("/") << i2c_message_mp3_recieve.chevron << endl;
   }
 }
 
@@ -340,21 +243,6 @@ void i2c_check_timeout(){
 void readKey(uint16_t keypress){
   int symbol = 0;
   Serial << F("Keypress: ") << keypress << endl;
-  #ifdef FAKE_GATE
-  if (keypress < 70){
-    symbol = 1;
-  } else if (keypress < 200){
-    symbol = 3;
-  } else if (keypress < 300){
-    symbol = 5;
-  } else if (keypress < 500){
-    symbol = 7;
-  } else if (keypress < 700){
-    symbol = 99;
-  }
-
-  #else
-
   if (keypress < 96){ // button 11
     symbol = 3;
   }
@@ -472,18 +360,105 @@ void readKey(uint16_t keypress){
   else if (keypress < 826){ // button 1
     symbol = 7;
   }
-  #endif
   Serial << F("Button symbol: ") << symbol << endl;
+
+  // check if middle button was on hold, trigger reset
+  if (symbol == 99){
+    if (address_reset_key_millis == 0){
+      Serial << F("* Reset key pressed first") << endl;
+      address_reset_key_millis = millis();
+
+    }else if(millis() - address_reset_key_millis < 1000){
+      // reset the DHD
+      Serial << F("* Reset key pressed second") << endl;
+      resetDHD();
+      return;
+    }else{
+      Serial << F("* Reset key timer reset") << endl;
+      address_reset_key_millis = 0;
+    }
+  }
+
   processKey(symbol);
 }
 
-// #define DFPLAYER_RECEIVED_LENGTH 10
-// #define DFPLAYER_SEND_LENGTH 10
-// uint8_t _sending[DFPLAYER_SEND_LENGTH] = {0x7E, 0xFF, 06, 00, 01, 00, 00, 00, 00, 0xEF};
-//
-// void play(byte track){
-//
-//
-//
-//
-// }
+
+void processKey(uint8_t symbol){
+  Serial << F("* address_queue_index:") << address_queue_index << endl;
+  Serial << F("* symbol:") << symbol << endl;
+
+  if (address_queue_index > 7){ // ignore if anything after 7th symbol and red button
+    Serial << F("* ignoring after 7th index:") << address_queue_index << endl;
+    address_last_key_millis = millis();
+    return;
+  } else if (address_queue_index == 7 and symbol != 99){ // ignore if anything else than red button after 7th symbol
+    Serial << F("* ignoring 7th index if not red:") << address_queue_index << F(" Symbol:") << symbol << endl;
+    address_last_key_millis = millis();
+    return;
+  }else if (address_queue_index != 7 and symbol == 99){
+    Serial << F("* ignoring red if not 7th index:") << address_queue_index << F(" Symbol:") << symbol << endl;
+    address_last_key_millis = millis();
+    return; // ignore red button if not after 7th symbol
+  }
+
+  // check if symbol not already in the address queue
+  for (int i = 0; i < address_queue_index; i++){
+    if (address_queue[i] == symbol){
+      Serial << F("* ignoring duplicate symbol: ") << symbol << endl;
+      address_last_key_millis = millis();
+      return;
+    }
+  }
+
+  if (address_queue_index < 7){
+    Serial << F("* LED ID: ") << DHD_Chevron_LED[address_queue_index] << F(" on index ") << address_queue_index << F(" is ON ") << endl;
+    digitalWrite(DHD_Chevron_LED[address_queue_index], HIGH);
+  }else{
+    Serial << F("- Skipping RED button LED at this stage, to be turned on only when last chevron is in") << endl;
+  }
+
+  Serial << F("* Send push button to MP3") << endl;
+  i2c_message_mp3_out.action = address_queue_index + 6; // offset 6 becouse thats where first button soudn starts
+  i2c_message_mp3_out.chevron = 0;
+  i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
+
+  Serial << F("* Send symbol comand to gate") << endl;
+  i2c_message_gate_out.action = address_queue_index+1;
+  i2c_message_gate_out.chevron = symbol;
+  i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
+
+  Serial << F("* Add symbol:") << symbol << F(" to address queue at index:") << address_queue_index << endl;
+  address_queue[address_queue_index] = symbol;
+
+  if (address_queue_index == 7){
+    // check if the address is valid
+    Serial << F("* Verifying that the complete address is valid") << endl;
+    bool addrvalid = false;
+    for (int i = 0; i < sizeof(valid_address_list) / sizeof(valid_address_list[0]); i++){
+      //Serial << F("* Comparing address: ") << address_queue[0] << F(":") << address_queue[1] << F(":") << address_queue[2] << F(":") << address_queue[3] << F(":") << address_queue[4] << F(":") << address_queue[5] << F(":") << address_queue[6] << F(":") << endl;
+      //Serial << F("* Comparing address: ") << valid_address_list[i][0] << F(":") << valid_address_list[i][1] << F(":") << valid_address_list[i][2] << F(":") << valid_address_list[i][3] << F(":") << valid_address_list[i][4] << F(":") << valid_address_list[i][5] << F(":") << valid_address_list[i][6] << F(":") << endl;
+      bool valid = true;
+      for (int j = 0; j < 7; j++){
+        if (address_queue[j] != valid_address_list[i][j]){
+          // Serial << F("- addr symbol is invalid: ") << address_queue[j] << F("<>") << valid_address_list[i][j] << endl;
+          valid = false;
+        }
+      }
+      if (valid){
+          // valid address
+          Serial << F("* Address is valid") << endl;
+          addrvalid = true;
+          break;
+      }
+    }
+    if (! addrvalid){
+      Serial << F("- Address is INVALID") << endl;
+      resetDHD();
+      return;
+    }
+  }
+
+  address_queue_index += 1;
+  Serial << F("* New address index:") << address_queue_index << endl;
+  address_last_key_millis = millis();
+}
