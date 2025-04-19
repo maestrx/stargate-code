@@ -24,7 +24,9 @@ unsigned long i2c_mp3_last_alive = 0;
 bool i2c_mp3_alive = false;
 const uint16_t i2c_timeout = 5000;
 
+// timer object
 Timer t;
+int8_t led_blink_timer;
 
 // timing of the dhd key input reset
 unsigned long address_last_key_millis = 0;
@@ -38,7 +40,7 @@ uint8_t address_queue_index = 0;    // index of the last symbol in the address q
 uint8_t valid_address_list[][7] = {
   {27,7 ,15,32,12,30,1 },   // Abydos
   {7 ,16,24,28,6 ,10,1 },   // Test
-  {34,1 ,33,2,32,39,31 },        // bluetooth test
+  {34,1 ,33,2,32,39,31 },   // test addr
 };
 
 
@@ -68,7 +70,7 @@ void setup(){
   t.every(500, i2c_send_mp3);
   delay(100);
   t.every(500, i2c_recieve_mp3);
-  //t.every(5000, i2c_check_timeout);
+  t.every(5000, i2c_check_timeout);
 
   // reset teh game to default
   Serial << F("* DHD reset") << endl;
@@ -177,26 +179,22 @@ void i2c_recieve_gate(){
     i2c_gate_alive = true;
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_START){
-    DEBUG_I2C_GATE_DEV << F("i Recieved dial start of chevron: ") << i2c_message_gate_recieve.chevron << endl;
+    Serial << F("i Recieved dial start of chevron ID: ") << i2c_message_gate_recieve.chevron << endl;
     // TODO: ?
 
-    //Serial << F("* Send gate dial start to MP3") << endl;
-    i2c_message_mp3_out.action = MP3_GATE_DIALING;
-    i2c_message_mp3_out.chevron = 0;
-    i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
+    led_blink_timer = t.oscillate(DHD_Chevron_LED[i2c_message_gate_recieve.chevron-1], 300, HIGH);
+
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_END){
-    DEBUG_I2C_GATE_DEV << F("i Recieved dial end: ") << i2c_message_gate_recieve.chevron << endl;
+    Serial << F("i Recieved dial end: ") << i2c_message_gate_recieve.chevron << endl;
 
     // reset the DHD timeout
     address_last_key_millis = millis();
 
+    t.stop(led_blink_timer);
+    digitalWrite(DHD_Chevron_LED[i2c_message_gate_recieve.chevron-1], HIGH);
     // TODO: ?
 
-    //Serial << F("* Send chevron seal") << endl;
-    i2c_message_mp3_out.action = MP3_CHEVRON_SEAL;
-    i2c_message_mp3_out.chevron = 0;
-    i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_NODATA){
     DEBUG_I2C_GATE_DEV << F("i No data recieved from gate!") << endl;

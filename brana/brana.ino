@@ -2,6 +2,8 @@
 #include <ArduinoQueue.h>
 #include <PrintStream.h>
 #include <Wire.h>
+#include <TEvent.h>
+#include <Timer.h>
 #include <CNCShield.h>
 #include <DFRobotDFPlayerMini.h>
 
@@ -14,6 +16,10 @@ i2c_message i2c_message_in;
 // queus for i2c messages
 ArduinoQueue<i2c_message> i2c_message_queue_in(32);
 ArduinoQueue<i2c_message> i2c_message_queue_out(32);
+
+// timer object
+Timer t;
+int8_t led_blink_timer;
 
 // timing of the gate reset
 unsigned long address_last_key_millis = 0;
@@ -81,6 +87,9 @@ void setup(){
 
 // main loop
 void loop(){
+  // trigger timer events
+  t.update();
+
   // check if there are any recieved I2C messages in the input queue
   process_in_queue();
 
@@ -160,6 +169,8 @@ void dial(){
 void resetGate(){
   Serial << F("+++ Gate reset") << endl;
 
+  led_blink_timer = t.oscillate(Gate_Chevron_LED[8], 300, HIGH);
+
   if (gate_wormhole_established){
     Serial << F("* Gate reset, closing wormhole") << endl;
     MP3player.stop();
@@ -174,7 +185,7 @@ void resetGate(){
   // turn off all LEDs
   Serial << F("* Turn off all LEDs") << endl;
   digitalWrite(Ramp_LED, LOW);
-  for (int i = 0; i < 9; i ++){
+  for (int i = 0; i < 8; i ++){
     digitalWrite(Gate_Chevron_LED[i], LOW);
   }
 
@@ -190,6 +201,8 @@ void resetGate(){
       break;
     }
     motor_gate->step(5, CLOCKWISE);
+    // trigger timer events
+    t.update();
   }
 
   digitalWrite(Calibrate_LED, LOW);
@@ -202,6 +215,9 @@ void resetGate(){
 
   // set current symbol on the top of the gate
   current_symbol = 1;
+
+  t.stop(led_blink_timer);
+  digitalWrite(Gate_Chevron_LED[8], LOW);
 
   Serial << F("--- Gate reset done") << endl;
 }
@@ -225,7 +241,7 @@ void process_in_queue(){
       // send dial start event to dhd
       Serial << F("* Sending dial started message to DHD") << endl;
       i2c_message_out.action = ACTION_DIAL_START;
-      i2c_message_out.chevron = i2c_message_in.chevron;
+      i2c_message_out.chevron = i2c_message_in.action;
       i2c_message_queue_out.enqueue(i2c_message_out);
 
       // do the gate dial
@@ -234,7 +250,7 @@ void process_in_queue(){
       // send dial done event to dhd
       Serial << F("* Sending dial done") << endl;
       i2c_message_out.action = ACTION_DIAL_END;
-      i2c_message_out.chevron = i2c_message_in.chevron;
+      i2c_message_out.chevron = i2c_message_in.action;
       i2c_message_queue_out.enqueue(i2c_message_out);
 
       // lit LED on the gate
