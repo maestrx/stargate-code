@@ -38,9 +38,13 @@ uint8_t address_queue_index = 0;    // index of the last symbol in the address q
 
 // list of valida addresses
 uint8_t valid_address_list[][7] = {
-  {27,7 ,15,32,12,30,1 },   // Abydos
-  {7 ,16,24,28,6 ,10,1 },   // Test
-  {34,1 ,33,2,32,39,31 },   // test addr
+  {27,  7, 15, 32, 12, 30,  1},  // Abydos
+  {26, 35,  6,  8, 23, 14,  1},  // Kheb
+  { 4, 29,  8, 22, 18, 25,  1},  // Tollana
+  {20, 18, 11, 34, 10, 32,  1},  // Apphopis base, 4th shoudl be 38, but due to bug in keypad its 34
+  { 9,  2, 23, 15, 37, 20,  1},  // Chulak
+  {28, 26,  5, 36, 11, 29,  7},  // Earth from Chulak
+  {34,  1, 33,  2, 32, 39, 31},  // test addr
 };
 
 
@@ -100,11 +104,11 @@ void loop(){
   }
 
   // reset the DHD to default in case no keypress was recieved in defined timeframe-
-  //if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
-  //  Serial << F("- Timeout: ") << (millis() - address_last_key_millis) << endl;
-  //  Serial << F("- Key press timeout. Doing reset!") << endl;
-  //  resetDHD();
-  //}
+  if (address_last_key_millis > 0 && millis() - address_last_key_millis > KEYPRESS_TIMEOUT){
+    Serial << F("- Timeout: ") << (millis() - address_last_key_millis) << endl;
+    Serial << F("- Key press timeout. Doing reset!") << endl;
+    resetDHD();
+  }
 }
 
 void resetDHD(){
@@ -180,10 +184,7 @@ void i2c_recieve_gate(){
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_START){
     Serial << F("i Recieved dial start of chevron ID: ") << i2c_message_gate_recieve.chevron << endl;
-    // TODO: ?
-
     led_blink_timer = t.oscillate(DHD_Chevron_LED[i2c_message_gate_recieve.chevron-1], 300, HIGH);
-
 
   } else if ( i2c_message_gate_recieve.action == ACTION_DIAL_END){
     Serial << F("i Recieved dial end: ") << i2c_message_gate_recieve.chevron << endl;
@@ -193,8 +194,11 @@ void i2c_recieve_gate(){
 
     t.stop(led_blink_timer);
     digitalWrite(DHD_Chevron_LED[i2c_message_gate_recieve.chevron-1], HIGH);
-    // TODO: ?
 
+  } else if ( i2c_message_gate_recieve.action == ACTION_WORMHOLE_ESTABLISHED){
+    Serial << F("i Recieved wormhole established") << endl;
+
+    digitalWrite(DHD_Chevron_LED[7], HIGH);
 
   } else if ( i2c_message_gate_recieve.action == ACTION_NODATA){
     DEBUG_I2C_GATE_DEV << F("i No data recieved from gate!") << endl;
@@ -424,11 +428,6 @@ void processKey(uint8_t symbol){
   i2c_message_mp3_out.chevron = 0;
   i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
 
-  Serial << F("* Send symbol comand to gate") << endl;
-  i2c_message_gate_out.action = address_queue_index+1;
-  i2c_message_gate_out.chevron = symbol;
-  i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
-
   Serial << F("* Add symbol:") << symbol << F(" to address queue at index:") << address_queue_index << endl;
   address_queue[address_queue_index] = symbol;
 
@@ -448,16 +447,29 @@ void processKey(uint8_t symbol){
       }
       if (valid){
           // valid address
-          Serial << F("* Address is valid") << endl;
+          Serial << F("* Address is valid, sending VALID to gate") << endl;
+          i2c_message_gate_out.action = ACTION_ADDR_VALID;
+          i2c_message_gate_out.chevron = 0;
+          i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
           addrvalid = true;
           break;
       }
     }
-    if (! addrvalid){
-      Serial << F("- Address is INVALID") << endl;
+    if (!addrvalid){
+      Serial << F("- Address is INVALID, playing invalid sound and doing reset") << endl;
+      i2c_message_mp3_out.action = MP3_UNKNOWN; // offset 6 becouse thats where first button soudn starts
+      i2c_message_mp3_out.chevron = 0;
+      i2c_message_queue_mp3_out.enqueue(i2c_message_mp3_out);
       resetDHD();
       return;
     }
+
+  } else {
+    Serial << F("* Send symbol comand to gate") << endl;
+    i2c_message_gate_out.action = address_queue_index+1;
+    i2c_message_gate_out.chevron = symbol;
+    i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
+
   }
 
   address_queue_index += 1;

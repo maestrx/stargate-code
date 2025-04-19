@@ -20,6 +20,7 @@ ArduinoQueue<i2c_message> i2c_message_queue_out(32);
 // timer object
 Timer t;
 int8_t led_blink_timer;
+int8_t established_sound_timer;
 
 // timing of the gate reset
 unsigned long address_last_key_millis = 0;
@@ -149,28 +150,46 @@ void dial(){
   Serial << F("* Dialing the gate") << endl;
   cnc_shield.enable();
   motor_gate->step(GATE_CHEVRON_STEPS * steps, dial_direction);
-
-  // play sound for teh chevron seal
-  Serial << F("* Play chevron seal sound") << endl;
-  MP3player.stop();
-  MP3player.play(2);
-
-  // delay between the start of sound and the chevron move
-  delay(100);
-
-  // while chevron seal sound id being played, seal the chevron
-  Serial << F("* Sealing chevron") << endl;
-  digitalWrite(Gate_Chevron_LED[8], HIGH);
-  motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
-  delay(1800);
-  motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
-  digitalWrite(Gate_Chevron_LED[8], LOW);
   cnc_shield.disable();
+
+  // seal the chevron, unless its the 7th symbol that si doen by addr valid command
+  if (i2c_message_in.action != 7){
+    chevronSeal();
+
+    // lit LED on the gate, 7th symbol led is done on wormhole establish
+    digitalWrite(Gate_Chevron_LED[i2c_message_in.action-1], HIGH);
+
+  }else{
+    // stop the dial sound on the 7th chevron as not stopped by chevron sounds
+    MP3player.stop();
+
+  }
 
   // set current symbol for next dialing
   current_symbol = i2c_message_in.chevron;
   Serial << F("* current_symbol after: ") << current_symbol << endl;
   Serial << F("--- gate dial end") << endl;
+}
+
+void chevronSeal(){
+    // play sound for teh chevron seal
+    Serial << F("* Play chevron seal sound") << endl;
+    MP3player.stop();
+    MP3player.play(2);
+
+    // delay between the start of sound and the chevron move
+    delay(100);
+
+    // while chevron seal sound id being played, seal the chevron
+    Serial << F("* Sealing chevron") << endl;
+    digitalWrite(Gate_Chevron_LED[8], HIGH);
+    cnc_shield.enable();
+    motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
+    delay(1800);
+    motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
+    cnc_shield.disable();
+    digitalWrite(Gate_Chevron_LED[8], LOW);
+
 }
 
 // reset gate to initial position
@@ -180,17 +199,18 @@ void resetGate(){
   led_blink_timer = t.oscillate(Gate_Chevron_LED[8], 300, HIGH);
 
   if (gate_wormhole_established){
+    gate_wormhole_established = false;
+    t.stop(established_sound_timer);
     Serial << F("* Gate reset, closing wormhole") << endl;
     MP3player.stop();
     MP3player.play(MP3_WORMHOLE_STOP);
-    delay(1000);
+    delay(2000);
   }
-  gate_wormhole_established = false;
 
   // reset key timeout timer
   address_last_key_millis = 0;
 
-  // turn off all LEDs
+  // turn off all LEDs except teh blinking top one
   Serial << F("* Turn off all LEDs") << endl;
   digitalWrite(Ramp_LED, LOW);
   for (int i = 0; i < 8; i ++){
@@ -204,6 +224,7 @@ void resetGate(){
   cnc_shield.enable();
   for (int i=0;i<2000;i++){
     int calib = analogRead(Calibrate_Resistor);
+    //Serial << F("= calib:") << calib << endl;
     if (calib>3){
       Serial << F("* Calib steps:") << i << endl;
       break;
@@ -261,27 +282,41 @@ void process_in_queue(){
       i2c_message_out.chevron = i2c_message_in.action;
       i2c_message_queue_out.enqueue(i2c_message_out);
 
-      // lit LED on the gate
-      digitalWrite(Gate_Chevron_LED[i2c_message_in.action-1], HIGH);
-
-      delay(3000);
+      // wait time to next chevron dial
+      delay(1500);
 
     // valid address entered, establish gate
     } else if (i2c_message_in.action == ACTION_ADDR_VALID){
-      // TODO: implement gate wormhole establishment
       Serial << F("+++ addr valid, start wormhole") << endl;
+
+      Serial << F("* sendign ACTION_WORMHOLE_ESTABLISHED to DHD") << endl;
+      i2c_message_out.action = ACTION_WORMHOLE_ESTABLISHED;
+      i2c_message_out.chevron = 0;
+      i2c_message_queue_out.enqueue(i2c_message_out);
+
+      // seal the chevron
+      chevronSeal();
+
+      // lit all LEDs on wormhole
+      for (int i = 0; i < 9; i ++){
+        digitalWrite(Gate_Chevron_LED[i], HIGH);
+      }
+      // lit the ramp
+      digitalWrite(Ramp_LED, HIGH);
+
       MP3player.stop();
       MP3player.play(MP3_WORMHOLE_START);
-      delay(1000);
+      delay(4000);
       MP3player.play(MP3_WORMHOLE_RUNNING);
       gate_wormhole_established = true;
+
+      Serial << F("* scheduling wormhole sound re-play") << endl;
+      established_sound_timer = t.every(18000, play_wormhole_sound);
 
     // INVALID address entered, reset gate
     } else if (i2c_message_in.action == ACTION_ADDR_INVALID){
       Serial << F("+++ addr invalid, fail dial") << endl;
-      // TODO: implement gate dial failure
-      MP3player.stop();
-      MP3player.play(MP3_UNKNOWN);
+      // This event will never happen, because the DHD will not send invalid address to the gate, but do reset instead
 
     // reset gate (after stop button ?)
     } else if (i2c_message_in.action == ACTION_GATE_RESET){
@@ -290,6 +325,12 @@ void process_in_queue(){
 
     }
   }
+}
+
+void play_wormhole_sound(){
+  Serial << F("* re-playing wormhole sound") << endl;
+  MP3player.play(MP3_WORMHOLE_RUNNING);
+
 }
 
 // recieve incoming message from DHD and put it into the incoming queue
