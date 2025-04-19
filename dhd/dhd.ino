@@ -67,17 +67,22 @@ void setup(){
   // Init I2C bus as MASTER and schedule the I2C push/pull tasks
   Serial << F("* I2C init") << endl;
   Wire.begin();
-  t.every(150, i2c_send_gate);
+  delay(50);
+  t.every(50000, dummy_function);  //dummy call as first function is never happenign, no cleu why...
+  delay(50);
+  t.every(150, i2c_send_mp3);
   delay(20);
   t.every(500, i2c_recieve_gate);
   delay(20);
-  t.every(150, i2c_send_mp3);
+  t.every(150, i2c_send_gate);
   delay(20);
   t.every(500, i2c_recieve_mp3);
   delay(20);
-  t.every(5000, i2c_check_timeout);
+  t.every(1000, i2c_check_timeout);
+  delay(20);
+  t.every(10000, i2c_queue_stats);
 
-  // reset teh game to default
+  // reset teh gate to default
   Serial << F("* DHD reset") << endl;
   resetDHD();
 
@@ -110,6 +115,17 @@ void loop(){
     Serial << F("- Key press timeout. Doing reset!") << endl;
     resetDHD();
   }
+}
+
+void dummy_function(){
+  // dummy function to trigger the timer event
+  Serial << F("Dummy function invocation") << endl;
+}
+
+void i2c_queue_stats(){
+  Serial << F("? Queue i2c_message_queue_gate_out size: ") << i2c_message_queue_gate_out.itemCount() << endl;
+  Serial << F("? Queue i2c_message_queue_mp3_out size: ") << i2c_message_queue_mp3_out.itemCount() << endl;
+
 }
 
 void resetDHD(){
