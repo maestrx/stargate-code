@@ -142,6 +142,9 @@ void dial(){
   MP3player.stop();
   MP3player.play(1);
 
+  // delay between the start of sound and the start of the motor
+  delay(800);
+
   // rotate the gate
   Serial << F("* Dialing the gate") << endl;
   cnc_shield.enable();
@@ -152,11 +155,16 @@ void dial(){
   MP3player.stop();
   MP3player.play(2);
 
+  // delay between the start of sound and the chevron move
+  delay(100);
+
   // while chevron seal sound id being played, seal the chevron
   Serial << F("* Sealing chevron") << endl;
+  digitalWrite(Gate_Chevron_LED[8], HIGH);
   motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
-  delay(500);
+  delay(1800);
   motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
+  digitalWrite(Gate_Chevron_LED[8], LOW);
   cnc_shield.disable();
 
   // set current symbol for next dialing
