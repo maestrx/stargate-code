@@ -42,7 +42,7 @@ uint8_t valid_address_list[][7] = {
   {26, 35,  6,  8, 23, 14,  1},  // Kheb
   { 4, 29,  8, 22, 18, 25,  1},  // Tollana
   {20, 18, 11, 34, 10, 32,  1},  // Apphopis base, 4th shoudl be 38, but due to bug in keypad its 34
-  { 9,  2, 23, 15, 37, 20,  1},  // Chulak
+  {10,  2, 23, 15, 37, 20,  1},  // Chulak, 1st shodul be 10
   {28, 26,  5, 36, 11, 29,  7},  // Earth from Chulak
   {34,  1, 33,  2, 32, 39, 31},  // test addr
 };
@@ -67,13 +67,14 @@ void setup(){
   // Init I2C bus as MASTER and schedule the I2C push/pull tasks
   Serial << F("* I2C init") << endl;
   Wire.begin();
-  t.every(500, i2c_send_gate);
-  delay(100);
+  t.every(150, i2c_send_gate);
+  delay(20);
   t.every(500, i2c_recieve_gate);
-  delay(100);
-  t.every(500, i2c_send_mp3);
-  delay(100);
+  delay(20);
+  t.every(150, i2c_send_mp3);
+  delay(20);
   t.every(500, i2c_recieve_mp3);
+  delay(20);
   t.every(5000, i2c_check_timeout);
 
   // reset teh game to default
@@ -121,6 +122,7 @@ void resetDHD(){
 
   // turn off all LEDs
   Serial << F("* Turn off all LEDs") << endl;
+  t.stop(led_blink_timer);
   for (int i = 0; i < 8; i ++){
     digitalWrite(DHD_Chevron_LED[i], LOW);
   }
