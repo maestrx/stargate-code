@@ -149,7 +149,7 @@ void resetDHD(){
   i2c_message_queue_gate_out.enqueue(i2c_message_gate_out);
 
   digitalWrite(DHD_Chevron_LED[7], HIGH);
-  delay(1000);
+  delay(DHD_DELAY_RESET_BLINK_DURATION);
   digitalWrite(DHD_Chevron_LED[7], LOW);
   Serial << F("--- DHD reset done") << endl;
 }
