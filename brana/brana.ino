@@ -144,7 +144,7 @@ void dial(){
   MP3player.play(1);
 
   // delay between the start of sound and the start of the motor
-  delay(800);
+  delay(GATE_DELAY_DIAL_VS_SOUND);
 
   // rotate the gate
   Serial << F("* Dialing the gate") << endl;
@@ -178,14 +178,14 @@ void chevronSeal(){
     MP3player.play(2);
 
     // delay between the start of sound and the chevron move
-    delay(100);
+    delay(GATE_DELAY_CHEVRON_VS_SOUND);
 
     // while chevron seal sound id being played, seal the chevron
     Serial << F("* Sealing chevron") << endl;
     digitalWrite(Gate_Chevron_LED[8], HIGH);
     cnc_shield.enable();
     motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, CLOCKWISE);
-    delay(1800);
+    delay(GATE_DELAY_CHEVRON_LOCK_DURATION);
     motor_chevron->step(GATE_CHEVRON_OPEN_STEPS, COUNTER);
     cnc_shield.disable();
     digitalWrite(Gate_Chevron_LED[8], LOW);
@@ -204,7 +204,7 @@ void resetGate(){
     Serial << F("* Gate reset, closing wormhole") << endl;
     MP3player.stop();
     MP3player.play(MP3_WORMHOLE_STOP);
-    delay(2000);
+    delay(GATE_WORMHOLE_CONNECT_PLAYTIME);
   }
 
   // reset key timeout timer
@@ -283,7 +283,7 @@ void process_in_queue(){
       i2c_message_queue_out.enqueue(i2c_message_out);
 
       // wait time to next chevron dial
-      delay(1500);
+      delay(GATE_DELAY_TO_NEXT_CHEVRON_DIAL);
 
     // valid address entered, establish gate
     } else if (i2c_message_in.action == ACTION_ADDR_VALID){
@@ -306,12 +306,12 @@ void process_in_queue(){
 
       MP3player.stop();
       MP3player.play(MP3_WORMHOLE_START);
-      delay(4000);
+      delay(GATE_DELAY_WORMHOLE_CONNECT_PLAYTIME);
       MP3player.play(MP3_WORMHOLE_RUNNING);
       gate_wormhole_established = true;
 
       Serial << F("* scheduling wormhole sound re-play") << endl;
-      established_sound_timer = t.every(18000, play_wormhole_sound);
+      established_sound_timer = t.every(GATE_WORMHOLE_ESTABLISHED_PLAYTIME_REPEAT, play_wormhole_sound);
 
     // INVALID address entered, reset gate
     } else if (i2c_message_in.action == ACTION_ADDR_INVALID){
