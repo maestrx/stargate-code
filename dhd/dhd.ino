@@ -457,7 +457,8 @@ void processKey(uint8_t symbol){
       //Serial << F("* Comparing address: ") << address_queue[0] << F(":") << address_queue[1] << F(":") << address_queue[2] << F(":") << address_queue[3] << F(":") << address_queue[4] << F(":") << address_queue[5] << F(":") << address_queue[6] << F(":") << endl;
       //Serial << F("* Comparing address: ") << valid_address_list[i][0] << F(":") << valid_address_list[i][1] << F(":") << valid_address_list[i][2] << F(":") << valid_address_list[i][3] << F(":") << valid_address_list[i][4] << F(":") << valid_address_list[i][5] << F(":") << valid_address_list[i][6] << F(":") << endl;
       bool valid = true;
-      for (int j = 0; j < 7; j++){
+      // validate first 6 symbols of each address, to allow dial from any source
+      for (int j = 0; j < 6; j++){
         if (address_queue[j] != valid_address_list[i][j]){
           // Serial << F("- addr symbol is invalid: ") << address_queue[j] << F("<>") << valid_address_list[i][j] << endl;
           valid = false;
